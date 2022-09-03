@@ -1,7 +1,7 @@
-mod read_at;
-pub use read_at::*;
-mod write_at;
-pub use write_at::*;
+mod io_at;
+pub use io_at::*;
+mod op;
+use op::*;
 
 use crate::{io_port::IO_PORT, *};
 use std::{
@@ -48,12 +48,12 @@ impl File {
         IO_PORT.attach(self)
     }
 
-    pub fn read_at(&self, buffer: Vec<u8>, pos: usize) -> FileAsyncRead {
-        FileAsyncRead::new(self.as_handle(), pos as _, buffer)
+    pub fn read_at(&self, buffer: Vec<u8>, pos: usize) -> FileAsyncIoAt<Read> {
+        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer)
     }
 
-    pub fn write_at(&self, buffer: Vec<u8>, pos: usize) -> FileAsyncWrite {
-        FileAsyncWrite::new(self.as_handle(), pos as _, buffer)
+    pub fn write_at(&self, buffer: Vec<u8>, pos: usize) -> FileAsyncIoAt<Write> {
+        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer)
     }
 }
 
