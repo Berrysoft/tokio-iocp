@@ -1,3 +1,4 @@
+use tempfile::NamedTempFile;
 use tokio_iocp::fs::File;
 
 fn main() -> std::io::Result<()> {
@@ -8,7 +9,7 @@ fn main() -> std::io::Result<()> {
         let n = n?;
         buf.resize(n, 0);
         print!("{}", String::from_utf8_lossy(&buf));
-        let file = File::create("temp.toml")?;
+        let file = File::create(NamedTempFile::new()?)?;
         let (n, _) = file.write_at(buf, 0).await;
         let n = n?;
         println!("Wrote {} bytes.", n);
