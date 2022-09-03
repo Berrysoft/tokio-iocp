@@ -1,11 +1,17 @@
 use tokio_iocp::fs::File;
 
-fn main() {
+fn main() -> std::io::Result<()> {
     tokio_iocp::start(async {
-        let file = File::open("Cargo.toml").unwrap();
+        let file = File::open("Cargo.toml")?;
         let buf = vec![0; 300];
-        let (n, buf) = file.read_at(buf, 0).await;
-        let n = n.unwrap();
-        print!("{}", String::from_utf8_lossy(&buf[..n]));
+        let (n, mut buf) = file.read_at(buf, 0).await;
+        let n = n?;
+        buf.resize(n, 0);
+        print!("{}", String::from_utf8_lossy(&buf));
+        let file = File::create("temp.toml")?;
+        let (n, _) = file.write_at(buf, 0).await;
+        let n = n?;
+        println!("Wrote {} bytes.", n);
+        Ok(())
     })
 }
