@@ -1,5 +1,5 @@
-use crate::{fs::File, *};
-use std::{cell::LazyCell, os::windows::io::AsRawHandle, ptr::null_mut, task::Waker};
+use crate::*;
+use std::{cell::LazyCell, ptr::null_mut, task::Waker};
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE},
     System::IO::{CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED},
@@ -23,8 +23,8 @@ impl IoPort {
         }
     }
 
-    pub fn attach(&self, f: &File) -> IoResult<()> {
-        let port = unsafe { CreateIoCompletionPort(f.as_raw_handle() as isize, self.port, 0, 0) };
+    pub fn attach(&self, handle: usize) -> IoResult<()> {
+        let port = unsafe { CreateIoCompletionPort(handle as isize, self.port, 0, 0) };
         if port == 0 {
             Err(IoError::last_os_error())
         } else {

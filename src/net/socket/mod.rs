@@ -1,6 +1,11 @@
 mod io;
 
-use crate::{buf::*, op::net::*, *};
+use crate::{
+    buf::*,
+    io_port::IO_PORT,
+    op::{recv::*, send::*},
+    *,
+};
 use std::{
     net::SocketAddr,
     ops::Deref,
@@ -58,12 +63,18 @@ impl Socket {
 
         let handle = unsafe { socket(family as _, ty, 0) };
         if handle != INVALID_SOCKET {
-            Ok(Self {
+            let socket = Self {
                 handle: unsafe { OwnedSocket::from_raw_socket(handle as _) },
-            })
+            };
+            socket.attach()?;
+            Ok(socket)
         } else {
             Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
         }
+    }
+
+    fn attach(&self) -> IoResult<()> {
+        IO_PORT.attach(self.handle.as_raw_socket() as _)
     }
 
     fn exact_addr<T>(addr: SocketAddr, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T {
