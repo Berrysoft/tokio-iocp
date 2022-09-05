@@ -3,7 +3,7 @@ mod io;
 use crate::{
     buf::*,
     io_port::IO_PORT,
-    op::{recv::*, send::*},
+    op::{recv::*, send::*, send_to::*, wsa_exact_addr},
     *,
 };
 use std::{
@@ -17,7 +17,7 @@ use std::{
 };
 use windows_sys::Win32::Networking::WinSock::{
     bind, connect, socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup, ADDRESS_FAMILY,
-    AF_INET, AF_INET6, INVALID_SOCKET, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6,
+    AF_INET, AF_INET6, INVALID_SOCKET,
 };
 
 use self::io::SocketAsyncIo;
@@ -77,45 +77,13 @@ impl Socket {
         IO_PORT.attach(self.handle.as_raw_socket() as _)
     }
 
-    fn exact_addr<T>(addr: SocketAddr, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T {
-        match addr {
-            SocketAddr::V4(addr) => {
-                let native_addr = unsafe {
-                    SOCKADDR_IN {
-                        sin_family: AF_INET as _,
-                        sin_port: addr.port(),
-                        sin_addr: std::mem::transmute(addr.ip().octets()),
-                        sin_zero: std::mem::zeroed(),
-                    }
-                };
-                f(
-                    std::ptr::addr_of!(native_addr) as _,
-                    std::mem::size_of_val(&native_addr) as _,
-                )
-            }
-            SocketAddr::V6(addr) => {
-                let native_addr = unsafe {
-                    SOCKADDR_IN6 {
-                        sin6_family: AF_INET6 as _,
-                        sin6_port: addr.port(),
-                        sin6_flowinfo: 0,
-                        sin6_addr: std::mem::transmute(addr.ip().octets()),
-                        Anonymous: std::mem::zeroed(),
-                    }
-                };
-                f(
-                    std::ptr::addr_of!(native_addr) as _,
-                    std::mem::size_of_val(&native_addr) as _,
-                )
-            }
-        }
-    }
-
     pub fn bind(addr: SocketAddr, ty: u16) -> IoResult<Self> {
         let socket = Self::new(get_domain(addr), ty as _)?;
-        let res = Self::exact_addr(addr, |addr, len| unsafe {
-            bind(socket.as_raw_socket() as _, addr, len)
-        });
+        let res = unsafe {
+            wsa_exact_addr(addr, |addr, len| {
+                bind(socket.as_raw_socket() as _, addr, len)
+            })
+        };
         if res == 0 {
             Ok(socket)
         } else {
@@ -124,9 +92,11 @@ impl Socket {
     }
 
     pub fn connect(&self, addr: SocketAddr) -> IoResult<()> {
-        let res = Self::exact_addr(addr, |addr, len| unsafe {
-            connect(self.handle.as_raw_socket() as _, addr, len)
-        });
+        let res = unsafe {
+            wsa_exact_addr(addr, |addr, len| {
+                connect(self.handle.as_raw_socket() as _, addr, len)
+            })
+        };
         if res == 0 {
             Ok(())
         } else {
@@ -148,6 +118,18 @@ impl Socket {
 
     pub fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> SocketAsyncIo<SendVectored<T>> {
         SocketAsyncIo::new(self.as_socket(), SendVectored::new(buffer))
+    }
+
+    pub fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> SocketAsyncIo<SendTo<T>> {
+        SocketAsyncIo::new(self.as_socket(), SendTo::new(buffer, addr))
+    }
+
+    pub fn send_to_vectored<T: IoBuf>(
+        &self,
+        buffer: Vec<T>,
+        addr: SocketAddr,
+    ) -> SocketAsyncIo<SendToVectored<T>> {
+        SocketAsyncIo::new(self.as_socket(), SendToVectored::new(buffer, addr))
     }
 }
 
