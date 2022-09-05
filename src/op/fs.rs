@@ -1,26 +1,17 @@
-use crate::{buf::*, *};
-use std::{marker::PhantomData, os::windows::prelude::RawHandle, task::Poll};
+use crate::{buf::*, op::*, *};
+use std::{marker::PhantomData, task::Poll};
 use windows_sys::Win32::{
-    Foundation::{GetLastError, ERROR_IO_PENDING},
+    Foundation::{ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
     Storage::FileSystem::{ReadFile, WriteFile},
     System::IO::OVERLAPPED,
 };
-
-pub trait IocpOperation: Unpin {
-    type Buffer: IoBuf;
-
-    unsafe fn operate(
-        handle: RawHandle,
-        buffer: &mut Self::Buffer,
-        overlapped_ptr: *mut OVERLAPPED,
-    ) -> Poll<IoResult<u32>>;
-}
 
 unsafe fn retrieve_result(res: i32, transfered: u32) -> Poll<IoResult<u32>> {
     if res == 0 {
         let error = GetLastError();
         match error {
-            ERROR_IO_PENDING => Poll::Pending,
+            ERROR_IO_PENDING | ERROR_IO_INCOMPLETE => Poll::Pending,
+            ERROR_HANDLE_EOF => Poll::Ready(Ok(0)),
             _ => Poll::Ready(Err(IoError::from_raw_os_error(error as _))),
         }
     } else {
@@ -30,11 +21,18 @@ unsafe fn retrieve_result(res: i32, transfered: u32) -> Poll<IoResult<u32>> {
 
 pub struct Read<T: IoBufMut>(PhantomData<T>);
 
+impl<T: IoBufMut> Default for Read<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
 impl<T: IoBufMut> IocpOperation for Read<T> {
     type Buffer = T;
 
     unsafe fn operate(
-        handle: RawHandle,
+        &self,
+        handle: usize,
         buffer: &mut T,
         overlapped_ptr: *mut OVERLAPPED,
     ) -> Poll<IoResult<u32>> {
@@ -52,11 +50,18 @@ impl<T: IoBufMut> IocpOperation for Read<T> {
 
 pub struct Write<T: IoBuf>(PhantomData<T>);
 
+impl<T: IoBuf> Default for Write<T> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
 impl<T: IoBuf> IocpOperation for Write<T> {
     type Buffer = T;
 
     unsafe fn operate(
-        handle: RawHandle,
+        &self,
+        handle: usize,
         buffer: &mut T,
         overlapped_ptr: *mut OVERLAPPED,
     ) -> Poll<IoResult<u32>> {
