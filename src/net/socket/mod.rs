@@ -4,12 +4,15 @@ use crate::{buf::*, op::net::*, *};
 use std::{
     net::SocketAddr,
     ops::Deref,
-    os::windows::io::{AsSocket, FromRawSocket, OwnedSocket},
+    os::windows::{
+        io::{AsSocket, FromRawSocket, OwnedSocket},
+        prelude::AsRawSocket,
+    },
     sync::OnceLock,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6,
-    INVALID_SOCKET,
+    bind, connect, socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup, ADDRESS_FAMILY,
+    AF_INET, AF_INET6, INVALID_SOCKET, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6,
 };
 
 use self::io::SocketAsyncIo;
@@ -50,14 +53,71 @@ const fn get_domain(addr: SocketAddr) -> ADDRESS_FAMILY {
 }
 
 impl Socket {
-    pub fn new(addr: SocketAddr, ty: i32) -> IoResult<Self> {
+    fn new(family: ADDRESS_FAMILY, ty: i32) -> IoResult<Self> {
         WSA_INIT.get_or_init(WSAInit::init);
 
-        let handle = unsafe { socket(get_domain(addr) as i32, ty, 0) };
+        let handle = unsafe { socket(family as _, ty, 0) };
         if handle != INVALID_SOCKET {
             Ok(Self {
                 handle: unsafe { OwnedSocket::from_raw_socket(handle as _) },
             })
+        } else {
+            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
+        }
+    }
+
+    fn exact_addr<T>(addr: SocketAddr, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T {
+        match addr {
+            SocketAddr::V4(addr) => {
+                let native_addr = unsafe {
+                    SOCKADDR_IN {
+                        sin_family: AF_INET as _,
+                        sin_port: addr.port(),
+                        sin_addr: std::mem::transmute(addr.ip().octets()),
+                        sin_zero: std::mem::zeroed(),
+                    }
+                };
+                f(
+                    std::ptr::addr_of!(native_addr) as _,
+                    std::mem::size_of_val(&native_addr) as _,
+                )
+            }
+            SocketAddr::V6(addr) => {
+                let native_addr = unsafe {
+                    SOCKADDR_IN6 {
+                        sin6_family: AF_INET6 as _,
+                        sin6_port: addr.port(),
+                        sin6_flowinfo: 0,
+                        sin6_addr: std::mem::transmute(addr.ip().octets()),
+                        Anonymous: std::mem::zeroed(),
+                    }
+                };
+                f(
+                    std::ptr::addr_of!(native_addr) as _,
+                    std::mem::size_of_val(&native_addr) as _,
+                )
+            }
+        }
+    }
+
+    pub fn bind(addr: SocketAddr, ty: u16) -> IoResult<Self> {
+        let socket = Self::new(get_domain(addr), ty as _)?;
+        let res = Self::exact_addr(addr, |addr, len| unsafe {
+            bind(socket.as_raw_socket() as _, addr, len)
+        });
+        if res == 0 {
+            Ok(socket)
+        } else {
+            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
+        }
+    }
+
+    pub fn connect(&self, addr: SocketAddr) -> IoResult<()> {
+        let res = Self::exact_addr(addr, |addr, len| unsafe {
+            connect(self.handle.as_raw_socket() as _, addr, len)
+        });
+        if res == 0 {
+            Ok(())
         } else {
             Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
         }

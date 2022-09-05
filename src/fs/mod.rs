@@ -46,12 +46,12 @@ impl File {
         IO_PORT.attach(self)
     }
 
-    pub fn read_at<T: IoBufMut>(&self, buffer: T, pos: usize) -> FileAsyncIoAt<Read<T>> {
-        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer, Read::default())
+    pub async fn read_at<T: IoBufMut>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
+        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer, Read::default()).await
     }
 
-    pub fn write_at<T: IoBuf>(&self, buffer: T, pos: usize) -> FileAsyncIoAt<Write<T>> {
-        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer, Write::default())
+    pub async fn write_at<T: IoBuf>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
+        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer, Write::default()).await
     }
 }
 
