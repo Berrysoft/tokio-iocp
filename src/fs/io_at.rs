@@ -1,6 +1,5 @@
-use crate::{io_port::OverlappedWaker, *};
+use crate::{buf::IoBuf, io_port::OverlappedWaker, *};
 use std::{
-    marker::PhantomData,
     os::windows::prelude::{AsRawHandle, BorrowedHandle},
     pin::Pin,
     task::{Context, Poll},
@@ -12,35 +11,33 @@ use windows_sys::Win32::{
 
 use super::op::IocpOperation;
 
-pub struct FileAsyncIoAt<'a, Op: IocpOperation + Unpin> {
+pub struct FileAsyncIoAt<'a, Op: IocpOperation> {
     handle: BorrowedHandle<'a>,
     pos: u32,
-    buffer: Vec<u8>,
+    buffer: Op::Buffer,
     overlapped_ptr: usize,
-    _op: PhantomData<Op>,
 }
 
-impl<'a, Op: IocpOperation + Unpin> FileAsyncIoAt<'a, Op> {
-    pub(crate) fn new(handle: BorrowedHandle<'a>, pos: u32, buffer: Vec<u8>) -> Self {
+impl<'a, Op: IocpOperation> FileAsyncIoAt<'a, Op> {
+    pub(crate) fn new(handle: BorrowedHandle<'a>, pos: u32, buffer: Op::Buffer) -> Self {
         Self {
             handle,
             pos,
             buffer,
             overlapped_ptr: 0,
-            _op: PhantomData::default(),
         }
     }
 
-    fn result(mut self: Pin<&mut Self>, res: IoResult<usize>) -> (IoResult<usize>, Vec<u8>) {
-        (res, std::mem::take(&mut self.buffer))
+    fn result(mut self: Pin<&mut Self>, res: IoResult<usize>) -> (IoResult<usize>, Op::Buffer) {
+        (res, self.buffer.take())
     }
 }
 
-impl<Op: IocpOperation + Unpin> Future for FileAsyncIoAt<'_, Op> {
-    type Output = (IoResult<usize>, Vec<u8>);
+impl<Op: IocpOperation> Future for FileAsyncIoAt<'_, Op> {
+    type Output = (IoResult<usize>, Op::Buffer);
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.buffer.is_empty() {
+        if self.buffer.buf_len() == 0 {
             Poll::Ready(self.result(Ok(0)))
         } else if self.overlapped_ptr == 0 {
             let mut overlapped = Box::new(OverlappedWaker::new());

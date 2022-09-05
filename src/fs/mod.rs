@@ -3,7 +3,7 @@ pub use io_at::*;
 mod op;
 use op::*;
 
-use crate::{io_port::IO_PORT, *};
+use crate::{buf::*, io_port::IO_PORT, *};
 use std::{
     fs::OpenOptions,
     ops::Deref,
@@ -48,11 +48,11 @@ impl File {
         IO_PORT.attach(self)
     }
 
-    pub fn read_at(&self, buffer: Vec<u8>, pos: usize) -> FileAsyncIoAt<Read> {
+    pub fn read_at<T: IoBufMut>(&self, buffer: T, pos: usize) -> FileAsyncIoAt<Read<T>> {
         FileAsyncIoAt::new(self.as_handle(), pos as _, buffer)
     }
 
-    pub fn write_at(&self, buffer: Vec<u8>, pos: usize) -> FileAsyncIoAt<Write> {
+    pub fn write_at<T: IoBuf>(&self, buffer: T, pos: usize) -> FileAsyncIoAt<Write<T>> {
         FileAsyncIoAt::new(self.as_handle(), pos as _, buffer)
     }
 }

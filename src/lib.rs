@@ -1,6 +1,7 @@
 #![feature(once_cell)]
 #![feature(thread_local)]
 
+pub mod buf;
 pub mod fs;
 mod io_port;
 pub mod runtime;

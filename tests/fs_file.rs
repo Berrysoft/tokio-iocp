@@ -31,7 +31,7 @@ fn basic_write() {
 
         let file = File::create(tempfile.path()).unwrap();
 
-        file.write_at(HELLO.to_vec(), 0).await.0.unwrap();
+        file.write_at(HELLO, 0).await.0.unwrap();
 
         let file = std::fs::read(tempfile.path()).unwrap();
         assert_eq!(file, HELLO);
@@ -62,7 +62,7 @@ fn drop_open() {
         // Do something else
         let file = File::create(tempfile.path()).unwrap();
 
-        file.write_at(HELLO.to_vec(), 0).await.0.unwrap();
+        file.write_at(HELLO, 0).await.0.unwrap();
 
         let file = std::fs::read(tempfile.path()).unwrap();
         assert_eq!(file, HELLO);
