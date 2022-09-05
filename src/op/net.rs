@@ -52,6 +52,47 @@ impl<T: IoBufMut> IocpOperation for Recv<T> {
     }
 }
 
+pub struct RecvVectored<T: IoBufMut> {
+    buffer: Vec<T>,
+}
+
+impl<T: IoBufMut> RecvVectored<T> {
+    pub fn new(buffer: Vec<T>) -> Self {
+        Self { buffer }
+    }
+}
+
+impl<T: IoBufMut> IocpOperation for RecvVectored<T> {
+    type Buffer = Vec<T>;
+
+    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+        let buffers = self
+            .buffer
+            .iter_mut()
+            .map(|buf| WSABUF {
+                len: buf.buf_len() as _,
+                buf: buf.as_buf_mut_ptr() as _,
+            })
+            .collect::<Vec<_>>();
+        let mut flags = 0;
+        let mut received = 0;
+        let res = WSARecv(
+            handle,
+            buffers.as_ptr(),
+            buffers.len() as _,
+            &mut received,
+            &mut flags,
+            overlapped_ptr,
+            None,
+        );
+        retrieve_result(res)
+    }
+
+    fn take_buffer(&mut self) -> Self::Buffer {
+        std::mem::take(&mut self.buffer)
+    }
+}
+
 pub struct Send<T: IoBuf> {
     buffer: T,
 }
@@ -77,5 +118,45 @@ impl<T: IoBuf> IocpOperation for Send<T> {
 
     fn take_buffer(&mut self) -> Self::Buffer {
         self.buffer.take()
+    }
+}
+
+pub struct SendVectored<T: IoBuf> {
+    buffer: Vec<T>,
+}
+
+impl<T: IoBuf> SendVectored<T> {
+    pub fn new(buffer: Vec<T>) -> Self {
+        Self { buffer }
+    }
+}
+
+impl<T: IoBuf> IocpOperation for SendVectored<T> {
+    type Buffer = Vec<T>;
+
+    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+        let buffers = self
+            .buffer
+            .iter()
+            .map(|buf| WSABUF {
+                len: buf.buf_len() as _,
+                buf: buf.as_buf_ptr() as _,
+            })
+            .collect::<Vec<_>>();
+        let mut sent = 0;
+        let res = WSASend(
+            handle,
+            buffers.as_ptr(),
+            buffers.len() as _,
+            &mut sent,
+            0,
+            overlapped_ptr,
+            None,
+        );
+        retrieve_result(res)
+    }
+
+    fn take_buffer(&mut self) -> Self::Buffer {
+        std::mem::take(&mut self.buffer)
     }
 }

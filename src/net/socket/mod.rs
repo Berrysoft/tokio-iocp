@@ -127,8 +127,16 @@ impl Socket {
         SocketAsyncIo::new(self.as_socket(), Recv::new(buffer))
     }
 
+    pub fn recv_vectored<T: IoBufMut>(&self, buffer: Vec<T>) -> SocketAsyncIo<RecvVectored<T>> {
+        SocketAsyncIo::new(self.as_socket(), RecvVectored::new(buffer))
+    }
+
     pub fn send<T: IoBuf>(&self, buffer: T) -> SocketAsyncIo<Send<T>> {
         SocketAsyncIo::new(self.as_socket(), Send::new(buffer))
+    }
+
+    pub fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> SocketAsyncIo<SendVectored<T>> {
+        SocketAsyncIo::new(self.as_socket(), SendVectored::new(buffer))
     }
 }
 
