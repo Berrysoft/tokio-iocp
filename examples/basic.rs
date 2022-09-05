@@ -4,7 +4,7 @@ use tokio_iocp::fs::File;
 fn main() -> std::io::Result<()> {
     tokio_iocp::start(async {
         let file = File::open("Cargo.toml")?;
-        let buf = vec![0; 300];
+        let buf = vec![0; 400];
         let (n, mut buf) = file.read_at(buf, 0).await;
         let n = n?;
         buf.resize(n, 0);

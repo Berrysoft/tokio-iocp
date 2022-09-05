@@ -124,11 +124,11 @@ impl Socket {
     }
 
     pub fn recv<T: IoBufMut>(&self, buffer: T) -> SocketAsyncIo<Recv<T>> {
-        SocketAsyncIo::new(self.as_socket(), buffer, Recv::default())
+        SocketAsyncIo::new(self.as_socket(), Recv::new(buffer))
     }
 
     pub fn send<T: IoBuf>(&self, buffer: T) -> SocketAsyncIo<Send<T>> {
-        SocketAsyncIo::new(self.as_socket(), buffer, Send::default())
+        SocketAsyncIo::new(self.as_socket(), Send::new(buffer))
     }
 }
 

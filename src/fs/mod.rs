@@ -47,11 +47,11 @@ impl File {
     }
 
     pub async fn read_at<T: IoBufMut>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
-        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer, Read::default()).await
+        FileAsyncIoAt::new(self.as_handle(), ReadAt::new(buffer, pos)).await
     }
 
     pub async fn write_at<T: IoBuf>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
-        FileAsyncIoAt::new(self.as_handle(), pos as _, buffer, Write::default()).await
+        FileAsyncIoAt::new(self.as_handle(), WriteAt::new(buffer, pos)).await
     }
 }
 
