@@ -25,14 +25,10 @@ impl<'a, Op: IocpOperation> FileAsyncIoAt<'a, Op> {
             overlapped_ptr: OnceCell::new(),
         }
     }
-
-    fn result(mut self: Pin<&mut Self>, res: IoResult<usize>) -> BufResult<usize, Op::Buffer> {
-        (res, self.op.take_buffer())
-    }
 }
 
 impl<Op: IocpOperation> Future for FileAsyncIoAt<'_, Op> {
-    type Output = BufResult<usize, Op::Buffer>;
+    type Output = BufResult<Op::Output, Op::Buffer>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.deref_mut();
@@ -47,7 +43,7 @@ impl<Op: IocpOperation> Future for FileAsyncIoAt<'_, Op> {
             Ok(overlapped_ptr as usize)
         }) {
             Ok(ptr) => *ptr,
-            Err(e) => return Poll::Ready(self.result(Err(e))),
+            Err(e) => return Poll::Ready(self.op.error(e)),
         };
         let mut transferred = 0;
         let res = unsafe {
@@ -62,11 +58,11 @@ impl<Op: IocpOperation> Future for FileAsyncIoAt<'_, Op> {
             let error = unsafe { GetLastError() };
             match error {
                 ERROR_IO_INCOMPLETE => Poll::Pending,
-                ERROR_HANDLE_EOF => Poll::Ready(self.result(Ok(0))),
-                _ => Poll::Ready(self.result(Err(IoError::from_raw_os_error(error as _)))),
+                ERROR_HANDLE_EOF => Poll::Ready(self.op.result(0)),
+                _ => Poll::Ready(self.op.error(IoError::from_raw_os_error(error as _))),
             }
         } else {
-            Poll::Ready(self.result(Ok(transferred as _)))
+            Poll::Ready(self.op.result(transferred as _))
         }
     }
 }

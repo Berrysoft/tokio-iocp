@@ -26,6 +26,7 @@ impl<T: IoBufMut> Recv<T> {
 }
 
 impl<T: IoBufMut> IocpOperation for Recv<T> {
+    type Output = usize;
     type Buffer = T;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -47,8 +48,12 @@ impl<T: IoBufMut> IocpOperation for Recv<T> {
         retrieve_result(res)
     }
 
-    fn take_buffer(&mut self) -> Self::Buffer {
-        self.buffer.take()
+    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
+        (Ok(res), self.buffer.take())
+    }
+
+    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
+        (Err(err), self.buffer.take())
     }
 }
 
@@ -63,6 +68,7 @@ impl<T: IoBufMut> RecvVectored<T> {
 }
 
 impl<T: IoBufMut> IocpOperation for RecvVectored<T> {
+    type Output = usize;
     type Buffer = Vec<T>;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -88,8 +94,12 @@ impl<T: IoBufMut> IocpOperation for RecvVectored<T> {
         retrieve_result(res)
     }
 
-    fn take_buffer(&mut self) -> Self::Buffer {
-        std::mem::take(&mut self.buffer)
+    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
+        (Ok(res), std::mem::take(&mut self.buffer))
+    }
+
+    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
+        (Err(err), std::mem::take(&mut self.buffer))
     }
 }
 
@@ -104,6 +114,7 @@ impl<T: IoBuf> Send<T> {
 }
 
 impl<T: IoBuf> IocpOperation for Send<T> {
+    type Output = usize;
     type Buffer = T;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -116,8 +127,12 @@ impl<T: IoBuf> IocpOperation for Send<T> {
         retrieve_result(res)
     }
 
-    fn take_buffer(&mut self) -> Self::Buffer {
-        self.buffer.take()
+    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
+        (Ok(res), self.buffer.take())
+    }
+
+    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
+        (Err(err), self.buffer.take())
     }
 }
 
@@ -132,6 +147,7 @@ impl<T: IoBuf> SendVectored<T> {
 }
 
 impl<T: IoBuf> IocpOperation for SendVectored<T> {
+    type Output = usize;
     type Buffer = Vec<T>;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -156,7 +172,11 @@ impl<T: IoBuf> IocpOperation for SendVectored<T> {
         retrieve_result(res)
     }
 
-    fn take_buffer(&mut self) -> Self::Buffer {
-        std::mem::take(&mut self.buffer)
+    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
+        (Ok(res), std::mem::take(&mut self.buffer))
+    }
+
+    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
+        (Err(err), std::mem::take(&mut self.buffer))
     }
 }

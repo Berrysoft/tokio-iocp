@@ -29,6 +29,7 @@ impl<T: IoBufMut> ReadAt<T> {
 }
 
 impl<T: IoBufMut> IocpOperation for ReadAt<T> {
+    type Output = usize;
     type Buffer = T;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -46,8 +47,12 @@ impl<T: IoBufMut> IocpOperation for ReadAt<T> {
         retrieve_result(res)
     }
 
-    fn take_buffer(&mut self) -> Self::Buffer {
-        self.buffer.take()
+    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
+        (Ok(res), self.buffer.take())
+    }
+
+    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
+        (Err(err), self.buffer.take())
     }
 }
 
@@ -63,6 +68,7 @@ impl<T: IoBuf> WriteAt<T> {
 }
 
 impl<T: IoBuf> IocpOperation for WriteAt<T> {
+    type Output = usize;
     type Buffer = T;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -80,7 +86,11 @@ impl<T: IoBuf> IocpOperation for WriteAt<T> {
         retrieve_result(res)
     }
 
-    fn take_buffer(&mut self) -> Self::Buffer {
-        self.buffer.take()
+    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
+        (Ok(res), self.buffer.take())
+    }
+
+    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
+        (Err(err), self.buffer.take())
     }
 }

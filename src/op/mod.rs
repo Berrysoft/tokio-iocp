@@ -8,9 +8,11 @@ use windows_sys::Win32::{
 };
 
 pub trait IocpOperation: Unpin {
-    type Buffer;
+    type Output: Unpin;
+    type Buffer: Unpin;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()>;
 
-    fn take_buffer(&mut self) -> Self::Buffer;
+    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer>;
+    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer>;
 }
