@@ -1,10 +1,5 @@
 use crate::op::*;
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use windows_sys::Win32::Networking::WinSock::WSARecvFrom;
-
-const ADDR_IN_SIZE: usize = std::mem::size_of::<SOCKADDR_IN>();
-const ADDR_IN6_SIZE: usize = std::mem::size_of::<SOCKADDR_IN6>();
-const MAX_ADDR_SIZE: usize = ADDR_IN6_SIZE;
 
 pub struct RecvFrom<T: WithWsaBufMut> {
     buffer: T,
@@ -18,30 +13,6 @@ impl<T: WithWsaBufMut> RecvFrom<T> {
             buffer: T::new(buffer),
             addr_buffer: [0; MAX_ADDR_SIZE],
             addr_size: MAX_ADDR_SIZE as _,
-        }
-    }
-
-    unsafe fn get_addr(&self) -> SocketAddr {
-        match self.addr_size as usize {
-            ADDR_IN_SIZE => {
-                let addr = self.addr_buffer.as_ptr() as *const SOCKADDR_IN;
-                let addr = addr.as_ref().unwrap();
-                SocketAddr::V4(SocketAddrV4::new(
-                    Ipv4Addr::from(addr.sin_addr.S_un.S_addr),
-                    addr.sin_port,
-                ))
-            }
-            ADDR_IN6_SIZE => {
-                let addr = self.addr_buffer.as_ptr() as *const SOCKADDR_IN6;
-                let addr = addr.as_ref().unwrap();
-                SocketAddr::V6(SocketAddrV6::new(
-                    Ipv6Addr::from(addr.sin6_addr.u.Byte),
-                    addr.sin6_port,
-                    addr.sin6_flowinfo,
-                    addr.Anonymous.sin6_scope_id,
-                ))
-            }
-            _ => unimplemented!(),
         }
     }
 }
@@ -74,7 +45,7 @@ impl<T: WithWsaBufMut> IocpOperation for RecvFrom<T> {
     }
 
     fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
-        let addr = unsafe { self.get_addr() };
+        let addr = unsafe { wsa_get_addr(self.addr_buffer.as_ptr() as _, self.addr_size as _) };
         (Ok((res, addr)), self.buffer.take_buf())
     }
 

@@ -1,7 +1,10 @@
 use crate::{
     buf::*,
     io_port::{socket::*, IO_PORT},
-    op::{recv::*, recv_from::*, send::*, send_to::*, wsa_exact_addr},
+    op::{
+        accept::*, recv::*, recv_from::*, send::*, send_to::*, wsa_exact_addr, wsa_get_addr,
+        MAX_ADDR_SIZE,
+    },
     *,
 };
 use std::{
@@ -14,7 +17,7 @@ use std::{
     sync::OnceLock,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, connect, listen, socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup,
+    bind, connect, getsockname, listen, socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup,
     ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO,
 };
 
@@ -109,7 +112,36 @@ impl Socket {
         }
     }
 
-    pub async fn accept(&self) -> IoResult<(Socket, SocketAddr)> {}
+    pub fn local_addr(&self) -> IoResult<SocketAddr> {
+        let mut name = [0u8; MAX_ADDR_SIZE];
+        let mut namelen: i32 = MAX_ADDR_SIZE as _;
+        let res = unsafe {
+            getsockname(
+                self.handle.as_raw_socket() as _,
+                name.as_mut_ptr() as _,
+                &mut namelen,
+            )
+        };
+        if res == 0 {
+            Ok(unsafe { wsa_get_addr(name.as_ptr() as _, namelen as _) })
+        } else {
+            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
+        }
+    }
+
+    pub async fn accept(&self, ty: u16, protocol: IPPROTO) -> IoResult<(Socket, SocketAddr)> {
+        let local_addr = self.local_addr()?;
+        let accept_socket = Socket::new(local_addr, ty, protocol)?;
+        let (res, accept_socket) =
+            SocketFuture::new(self.as_socket(), Accept::new(accept_socket.handle)).await;
+        let addr = res?;
+        Ok((
+            Socket {
+                handle: accept_socket,
+            },
+            addr,
+        ))
+    }
 
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
         SocketFuture::new(self.as_socket(), RecvOne::new(buffer)).await

@@ -1,4 +1,4 @@
-mod buf_wrapper;
+pub mod accept;
 pub mod read_at;
 pub mod recv;
 pub mod recv_from;
@@ -6,10 +6,11 @@ pub mod send;
 pub mod send_to;
 pub mod write_at;
 
+mod buf_wrapper;
 pub use buf_wrapper::*;
 
 use crate::{buf::*, *};
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING},
     Networking::WinSock::{
@@ -80,5 +81,31 @@ pub unsafe fn wsa_exact_addr<T>(addr: SocketAddr, f: impl FnOnce(*const SOCKADDR
                 std::mem::size_of_val(&native_addr) as _,
             )
         }
+    }
+}
+
+const ADDR_IN_SIZE: usize = std::mem::size_of::<SOCKADDR_IN>();
+const ADDR_IN6_SIZE: usize = std::mem::size_of::<SOCKADDR_IN6>();
+pub const MAX_ADDR_SIZE: usize = ADDR_IN6_SIZE;
+
+pub unsafe fn wsa_get_addr(addr: *const SOCKADDR, len: usize) -> SocketAddr {
+    match len {
+        ADDR_IN_SIZE => {
+            let addr = (addr as *const SOCKADDR_IN).as_ref().unwrap();
+            SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::from(addr.sin_addr.S_un.S_addr),
+                addr.sin_port,
+            ))
+        }
+        ADDR_IN6_SIZE => {
+            let addr = (addr as *const SOCKADDR_IN6).as_ref().unwrap();
+            SocketAddr::V6(SocketAddrV6::new(
+                Ipv6Addr::from(addr.sin6_addr.u.Byte),
+                addr.sin6_port,
+                addr.sin6_flowinfo,
+                addr.Anonymous.sin6_scope_id,
+            ))
+        }
+        _ => unimplemented!(),
     }
 }

@@ -14,7 +14,7 @@ impl TcpListener {
     }
 
     pub async fn accept(&self) -> IoResult<(TcpStream, SocketAddr)> {
-        let (socket, addr) = self.inner.accept().await?;
+        let (socket, addr) = self.inner.accept(SOCK_STREAM, IPPROTO_TCP).await?;
         let stream = TcpStream { inner: socket };
         Ok((stream, addr))
     }
