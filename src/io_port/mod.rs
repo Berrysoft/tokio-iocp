@@ -8,7 +8,7 @@ use std::{
     task::Waker,
 };
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE},
+    Foundation::{CloseHandle, GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE, WAIT_TIMEOUT},
     System::IO::{CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED},
 };
 
@@ -49,13 +49,15 @@ impl IoPort {
                 &mut transferred,
                 &mut key,
                 &mut overlapped_ptr,
-                0xFFFFFFFF, // INFINITE
+                0, // INFINITE
             )
         };
         if res == 0 {
             let error = unsafe { GetLastError() };
-            if error != ERROR_HANDLE_EOF {
-                return Err(IoError::from_raw_os_error(error as _));
+            match error {
+                WAIT_TIMEOUT => return Ok(()),
+                ERROR_HANDLE_EOF => {}
+                _ => return Err(IoError::from_raw_os_error(error as _)),
             }
         }
         let mut overlapped = OverlappedWaker::from_raw(overlapped_ptr as _);

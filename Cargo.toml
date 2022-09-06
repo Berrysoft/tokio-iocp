@@ -13,4 +13,5 @@ windows-sys = { version = "0.36", features = [
 ] }
 
 [dev-dependencies]
+tokio = { version = "1", features = ["net"] }
 tempfile = "3.3"

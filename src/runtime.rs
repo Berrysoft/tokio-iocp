@@ -1,9 +1,11 @@
 use crate::{io_port::IO_PORT, *};
 use std::future::Future;
+use tokio::task::{JoinHandle, LocalSet};
 
 #[derive(Debug)]
 pub struct Runtime {
     rt: tokio::runtime::Runtime,
+    local: LocalSet,
 }
 
 impl Runtime {
@@ -13,14 +15,15 @@ impl Runtime {
                 .on_thread_park(|| IO_PORT.poll().unwrap())
                 .enable_all()
                 .build()?,
+            local: LocalSet::new(),
         })
     }
 
-    pub fn block_on<F: Future>(&mut self, future: F) -> F::Output {
-        self.rt.block_on(future)
+    pub fn block_on<F: Future>(&self, future: F) -> F::Output {
+        self.local.block_on(&self.rt, future)
     }
 }
 
-pub fn spawn<F: Future + 'static>(future: F) -> tokio::task::JoinHandle<F::Output> {
+pub fn spawn<F: Future + 'static>(future: F) -> JoinHandle<F::Output> {
     tokio::task::spawn_local(future)
 }

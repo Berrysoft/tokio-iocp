@@ -15,6 +15,7 @@ use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING},
     Networking::WinSock::{
         WSAGetLastError, AF_INET, AF_INET6, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, WSA_IO_INCOMPLETE,
+        WSA_IO_PENDING,
     },
     System::IO::OVERLAPPED,
 };
@@ -46,7 +47,7 @@ pub unsafe fn wsa_result(res: i32) -> IoResult<()> {
     if res == 0 {
         let error = WSAGetLastError();
         match error {
-            WSA_IO_INCOMPLETE => Ok(()),
+            WSA_IO_PENDING | WSA_IO_INCOMPLETE => Ok(()),
             _ => Err(IoError::from_raw_os_error(error as _)),
         }
     } else {

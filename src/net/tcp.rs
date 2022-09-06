@@ -7,8 +7,8 @@ pub struct TcpListener {
 }
 
 impl TcpListener {
-    pub fn bind(addr: SocketAddr) -> IoResult<Self> {
-        let socket = Socket::bind(addr, SOCK_STREAM, IPPROTO_TCP)?;
+    pub fn bind(addr: impl Into<SocketAddr>) -> IoResult<Self> {
+        let socket = Socket::bind(addr.into(), SOCK_STREAM, IPPROTO_TCP)?;
         socket.listen(SOMAXCONN as _)?;
         Ok(Self { inner: socket })
     }
@@ -18,6 +18,10 @@ impl TcpListener {
         let stream = TcpStream { inner: socket };
         Ok((stream, addr))
     }
+
+    pub fn local_addr(&self) -> IoResult<SocketAddr> {
+        self.inner.local_addr()
+    }
 }
 
 pub struct TcpStream {
@@ -25,10 +29,15 @@ pub struct TcpStream {
 }
 
 impl TcpStream {
-    pub fn connect(addr: SocketAddr) -> IoResult<Self> {
+    pub fn connect(addr: impl Into<SocketAddr>) -> IoResult<Self> {
+        let addr = addr.into();
         let socket = Socket::new(addr, SOCK_STREAM, IPPROTO_TCP)?;
         socket.connect(addr)?;
         Ok(Self { inner: socket })
+    }
+
+    pub fn local_addr(&self) -> IoResult<SocketAddr> {
+        self.inner.local_addr()
     }
 
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {

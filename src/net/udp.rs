@@ -7,14 +7,18 @@ pub struct UdpSocket {
 }
 
 impl UdpSocket {
-    pub fn bind(addr: SocketAddr) -> IoResult<Self> {
+    pub fn bind(addr: impl Into<SocketAddr>) -> IoResult<Self> {
         Ok(Self {
-            inner: Socket::bind(addr, SOCK_DGRAM, IPPROTO_UDP)?,
+            inner: Socket::bind(addr.into(), SOCK_DGRAM, IPPROTO_UDP)?,
         })
     }
 
-    pub fn connect(&self, addr: SocketAddr) -> IoResult<()> {
-        self.inner.connect(addr)
+    pub fn connect(&self, addr: impl Into<SocketAddr>) -> IoResult<()> {
+        self.inner.connect(addr.into())
+    }
+
+    pub fn local_addr(&self) -> IoResult<SocketAddr> {
+        self.inner.local_addr()
     }
 
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
