@@ -1,4 +1,6 @@
 mod socket;
+mod tcp;
 mod udp;
 
-pub use udp::UdpSocket;
+pub use tcp::*;
+pub use udp::*;
