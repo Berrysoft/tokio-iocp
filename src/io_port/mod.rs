@@ -8,7 +8,7 @@ use std::{
     task::Waker,
 };
 use windows_sys::Win32::{
-    Foundation::{GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE},
+    Foundation::{CloseHandle, GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE},
     System::IO::{CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED},
 };
 
@@ -63,6 +63,12 @@ impl IoPort {
             waker.wake()
         }
         Ok(())
+    }
+}
+
+impl Drop for IoPort {
+    fn drop(&mut self) {
+        unsafe { CloseHandle(self.port) };
     }
 }
 
