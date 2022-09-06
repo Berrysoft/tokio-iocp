@@ -49,7 +49,7 @@ impl IoPort {
                 &mut transferred,
                 &mut key,
                 &mut overlapped_ptr,
-                0, // INFINITE
+                0,
             )
         };
         if res == 0 {

@@ -13,8 +13,13 @@ impl UdpSocket {
         })
     }
 
-    pub fn connect(&self, addr: impl Into<SocketAddr>) -> IoResult<()> {
-        self.inner.connect(addr.into())
+    pub async fn connect(addr: impl Into<SocketAddr>) -> IoResult<Self> {
+        let addr = addr.into();
+        let this = Self {
+            inner: Socket::bind_any_like(addr, SOCK_DGRAM, IPPROTO_UDP)?,
+        };
+        this.inner.connect(addr).await?;
+        Ok(this)
     }
 
     pub fn local_addr(&self) -> IoResult<SocketAddr> {

@@ -7,7 +7,7 @@ fn main() {
         let addr = listener.local_addr().unwrap();
 
         let task = tokio_iocp::spawn(async move {
-            let _socket = TcpStream::connect(addr).unwrap();
+            let _socket = TcpStream::connect(addr).await.unwrap();
         });
 
         // Accept a connection

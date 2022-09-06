@@ -29,10 +29,10 @@ pub struct TcpStream {
 }
 
 impl TcpStream {
-    pub fn connect(addr: impl Into<SocketAddr>) -> IoResult<Self> {
+    pub async fn connect(addr: impl Into<SocketAddr>) -> IoResult<Self> {
         let addr = addr.into();
-        let socket = Socket::new(addr, SOCK_STREAM, IPPROTO_TCP)?;
-        socket.connect(addr)?;
+        let socket = Socket::bind_any_like(addr, SOCK_STREAM, IPPROTO_TCP)?;
+        socket.connect(addr).await?;
         Ok(Self { inner: socket })
     }
 

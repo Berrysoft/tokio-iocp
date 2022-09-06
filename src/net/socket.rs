@@ -2,23 +2,24 @@ use crate::{
     buf::*,
     io_port::{socket::*, IO_PORT},
     op::{
-        accept::*, recv::*, recv_from::*, send::*, send_to::*, wsa_exact_addr, wsa_get_addr,
-        MAX_ADDR_SIZE,
+        accept::*, connect::*, recv::*, recv_from::*, send::*, send_to::*, wsa_exact_addr,
+        wsa_get_addr, MAX_ADDR_SIZE,
     },
     *,
 };
 use std::{
-    net::SocketAddr,
+    net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     ops::Deref,
     os::windows::{
         io::{AsSocket, FromRawSocket, OwnedSocket},
         prelude::AsRawSocket,
     },
+    ptr::null,
     sync::OnceLock,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, connect, getsockname, listen, socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup,
-    ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO,
+    bind, getsockname, listen, WSACleanup, WSAData, WSAGetLastError, WSASocketW, WSAStartup,
+    ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -60,7 +61,16 @@ impl Socket {
     pub fn new(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
         WSA_INIT.get_or_init(WSAInit::init);
 
-        let handle = unsafe { socket(get_domain(addr) as _, ty as _, protocol) };
+        let handle = unsafe {
+            WSASocketW(
+                get_domain(addr) as _,
+                ty as _,
+                protocol,
+                null(),
+                0,
+                WSA_FLAG_OVERLAPPED,
+            )
+        };
         if handle != INVALID_SOCKET {
             let socket = Self {
                 handle: unsafe { OwnedSocket::from_raw_socket(handle as _) },
@@ -90,17 +100,18 @@ impl Socket {
         }
     }
 
-    pub fn connect(&self, addr: SocketAddr) -> IoResult<()> {
-        let res = unsafe {
-            wsa_exact_addr(addr, |addr, len| {
-                connect(self.handle.as_raw_socket() as _, addr, len)
-            })
+    pub fn bind_any_like(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
+        let new_addr = match addr {
+            SocketAddr::V4(addr) => SocketAddrV4::new(*addr.ip(), 0).into(),
+            SocketAddr::V6(addr) => SocketAddrV6::new(*addr.ip(), 0, 0, 0).into(),
         };
-        if res == 0 {
-            Ok(())
-        } else {
-            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
-        }
+        Self::bind(new_addr, ty, protocol)
+    }
+
+    pub async fn connect(&self, addr: SocketAddr) -> IoResult<()> {
+        SocketFuture::new(self.handle.as_socket(), Connect::new(addr))
+            .await
+            .0
     }
 
     pub fn listen(&self, backlog: i32) -> IoResult<()> {

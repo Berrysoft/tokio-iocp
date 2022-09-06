@@ -2,8 +2,12 @@ use crate::op::*;
 use std::{
     os::windows::prelude::{AsRawSocket, OwnedSocket},
     ptr::null_mut,
+    sync::OnceLock,
 };
-use windows_sys::Win32::Networking::WinSock::{AcceptEx, GetAcceptExSockaddrs};
+use windows_sys::Win32::Networking::WinSock::{LPFN_ACCEPTEX, LPFN_GETACCEPTEXSOCKADDRS};
+
+static ACCEPT_EX: OnceLock<LPFN_ACCEPTEX> = OnceLock::new();
+static GET_ADDRS: OnceLock<LPFN_GETACCEPTEXSOCKADDRS> = OnceLock::new();
 
 pub struct Accept {
     accept_handle: Option<OwnedSocket>,
@@ -24,8 +28,16 @@ impl IocpOperation for Accept {
     type Buffer = OwnedSocket;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+        let accept_fn = ACCEPT_EX.get_or_try_init(|| {
+            let fguid = guid_from_u128(0xb5367df1_cbac_11cf_95ca_00805f48a192);
+            get_wsa_fn(handle, fguid)
+        })?;
+        let _get_addrs_fn = GET_ADDRS.get_or_try_init(|| {
+            let fguid = guid_from_u128(0xb5367df2_cbac_11cf_95ca_00805f48a192);
+            get_wsa_fn(handle, fguid)
+        })?;
         let mut received = 0;
-        let res = AcceptEx(
+        let res = accept_fn.unwrap()(
             handle,
             self.accept_handle.as_ref().unwrap().as_raw_socket() as _,
             self.addr_buffer.as_ptr() as _,
@@ -46,7 +58,7 @@ impl IocpOperation for Accept {
             let mut local_addr_len = 0;
             let mut remote_addr: *mut SOCKADDR = null_mut();
             let mut remote_addr_len = 0;
-            GetAcceptExSockaddrs(
+            (GET_ADDRS.get().unwrap().unwrap())(
                 self.addr_buffer.as_ptr() as _,
                 0,
                 MAX_ADDR_SIZE as _,
