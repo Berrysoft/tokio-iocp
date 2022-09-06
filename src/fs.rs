@@ -46,7 +46,7 @@ impl File {
     }
 
     fn attach(&self) -> IoResult<()> {
-        IO_PORT.attach(self.handle.as_raw_handle() as _)
+        IO_PORT.with(|port| port.attach(self.handle.as_raw_handle() as _))
     }
 
     pub async fn read_at<T: IoBufMut>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {

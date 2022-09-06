@@ -1,8 +1,8 @@
 use crate::op::*;
+use once_cell::sync::OnceCell as OnceLock;
 use std::{
     os::windows::prelude::{AsRawSocket, OwnedSocket},
     ptr::null_mut,
-    sync::OnceLock,
 };
 use windows_sys::Win32::Networking::WinSock::{LPFN_ACCEPTEX, LPFN_GETACCEPTEXSOCKADDRS};
 

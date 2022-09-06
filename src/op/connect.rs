@@ -1,5 +1,6 @@
 use crate::op::*;
-use std::{ptr::null, sync::OnceLock};
+use once_cell::sync::OnceCell as OnceLock;
+use std::ptr::null;
 use windows_sys::Win32::Networking::WinSock::LPFN_CONNECTEX;
 
 static CONNECT_EX: OnceLock<LPFN_CONNECTEX> = OnceLock::new();

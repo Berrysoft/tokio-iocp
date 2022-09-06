@@ -2,19 +2,16 @@ pub mod file;
 pub mod socket;
 
 use crate::*;
-use std::{
-    cell::{LazyCell, OnceCell, RefCell},
-    ptr::null_mut,
-    rc::Rc,
-    task::Waker,
-};
+use once_cell::unsync::OnceCell;
+use std::{cell::RefCell, ptr::null_mut, rc::Rc, task::Waker};
 use windows_sys::Win32::{
     Foundation::{CloseHandle, GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE, WAIT_TIMEOUT},
     System::IO::{CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED},
 };
 
-#[thread_local]
-pub(crate) static IO_PORT: LazyCell<IoPort> = LazyCell::new(|| IoPort::new().unwrap());
+thread_local! {
+    pub static IO_PORT: IoPort = IoPort::new().unwrap();
+}
 
 #[derive(Debug)]
 pub struct IoPort {

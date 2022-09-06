@@ -7,6 +7,7 @@ use crate::{
     },
     *,
 };
+use once_cell::sync::OnceCell as OnceLock;
 use std::{
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     ops::Deref,
@@ -15,7 +16,6 @@ use std::{
         prelude::AsRawSocket,
     },
     ptr::null,
-    sync::OnceLock,
 };
 use windows_sys::Win32::Networking::WinSock::{
     bind, getsockname, listen, WSACleanup, WSAData, WSAGetLastError, WSASocketW, WSAStartup,
@@ -83,7 +83,7 @@ impl Socket {
     }
 
     fn attach(&self) -> IoResult<()> {
-        IO_PORT.attach(self.handle.as_raw_socket() as _)
+        IO_PORT.with(|port| port.attach(self.handle.as_raw_socket() as _))
     }
 
     pub fn bind(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
