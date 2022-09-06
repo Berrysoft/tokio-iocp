@@ -12,7 +12,7 @@ impl Runtime {
     pub fn new() -> IoResult<Self> {
         Ok(Self {
             rt: tokio::runtime::Builder::new_current_thread()
-                .on_thread_park(|| IO_PORT.poll().unwrap())
+                .on_thread_park(|| IO_PORT.poll())
                 .enable_all()
                 .build()?,
             local: LocalSet::new(),

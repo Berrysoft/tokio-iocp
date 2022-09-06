@@ -1,4 +1,4 @@
-use crate::{io_port::OverlappedWakerWrapper, op::IocpOperation, *};
+use crate::{io_port::*, op::IocpOperation, *};
 use std::{
     os::windows::prelude::{AsRawHandle, BorrowedHandle},
     pin::Pin,
@@ -58,9 +58,16 @@ impl<Op: IocpOperation> Future for FileFuture<'_, Op> {
                 _ => Poll::Ready(this.op.error(IoError::from_raw_os_error(error as _))),
             }
         } else {
-            let transferred = transferred as usize;
-            this.op.set_buf_len(transferred);
-            Poll::Ready(this.op.result(transferred))
+            let overlapped_ptr = overlapped_ptr as *mut OverlappedWaker;
+            let overlapped_ptr = unsafe { overlapped_ptr.as_mut() }.unwrap();
+            match overlapped_ptr.take_err() {
+                Ok(()) => {
+                    let transferred = transferred as usize;
+                    this.op.set_buf_len(transferred);
+                    Poll::Ready(this.op.result(transferred))
+                }
+                Err(err) => Poll::Ready(this.op.error(err)),
+            }
         }
     }
 }

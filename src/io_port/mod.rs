@@ -39,7 +39,7 @@ impl IoPort {
         }
     }
 
-    pub fn poll(&self) -> IoResult<()> {
+    pub fn poll(&self) {
         let mut transferred = 0;
         let mut key = 0;
         let mut overlapped_ptr = null_mut();
@@ -52,19 +52,18 @@ impl IoPort {
                 0,
             )
         };
+        let mut overlapped = OverlappedWaker::from_raw(overlapped_ptr as _);
         if res == 0 {
             let error = unsafe { GetLastError() };
             match error {
-                WAIT_TIMEOUT => return Ok(()),
+                WAIT_TIMEOUT => return,
                 ERROR_HANDLE_EOF => {}
-                _ => return Err(IoError::from_raw_os_error(error as _)),
+                _ => overlapped.set_err(IoError::from_raw_os_error(error as _)),
             }
         }
-        let mut overlapped = OverlappedWaker::from_raw(overlapped_ptr as _);
         if let Some(waker) = overlapped.take_waker() {
             waker.wake()
         }
-        Ok(())
     }
 }
 
@@ -76,8 +75,9 @@ impl Drop for IoPort {
 
 #[repr(C)]
 pub struct OverlappedWaker {
-    pub overlapped: OVERLAPPED,
-    pub waker: Option<Waker>,
+    overlapped: OVERLAPPED,
+    waker: Option<Waker>,
+    err: IoResult<()>,
 }
 
 impl OverlappedWaker {
@@ -85,6 +85,7 @@ impl OverlappedWaker {
         Self {
             overlapped: unsafe { std::mem::zeroed() },
             waker: None,
+            err: Ok(()),
         }
     }
 
@@ -94,6 +95,14 @@ impl OverlappedWaker {
 
     pub fn take_waker(&mut self) -> Option<Waker> {
         self.waker.take()
+    }
+
+    pub fn set_err(&mut self, err: IoError) {
+        self.err = Err(err);
+    }
+
+    pub fn take_err(&mut self) -> IoResult<()> {
+        std::mem::replace(&mut self.err, Ok(()))
     }
 
     pub fn leak(self) -> *mut Self {
