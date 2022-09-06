@@ -30,7 +30,7 @@ impl<Op: IocpOperation> Future for FileFuture<'_, Op> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let (first, overlapped_ptr) = match this
+        let (overlapped, overlapped_ptr) = match this
             .overlapped_ptr
             .get_and_try_op(cx.waker().clone(), |ptr| unsafe {
                 this.op.operate(this.handle.as_raw_handle() as _, ptr)
@@ -38,9 +38,6 @@ impl<Op: IocpOperation> Future for FileFuture<'_, Op> {
             Ok(ptr) => ptr,
             Err(e) => return Poll::Ready(this.op.error(e)),
         };
-        if first {
-            return Poll::Pending;
-        }
         let mut transferred = 0;
         let res = unsafe {
             GetOverlappedResult(
@@ -58,15 +55,13 @@ impl<Op: IocpOperation> Future for FileFuture<'_, Op> {
                 _ => Poll::Ready(this.op.error(IoError::from_raw_os_error(error as _))),
             }
         } else {
-            let overlapped_ptr = overlapped_ptr as *mut OverlappedWaker;
-            let overlapped_ptr = unsafe { overlapped_ptr.as_mut() }.unwrap();
-            match overlapped_ptr.take_err() {
-                Ok(()) => {
+            match overlapped.take_err() {
+                None => {
                     let transferred = transferred as usize;
                     this.op.set_buf_len(transferred);
                     Poll::Ready(this.op.result(transferred))
                 }
-                Err(err) => Poll::Ready(this.op.error(err)),
+                Some(err) => Poll::Ready(this.op.error(err)),
             }
         }
     }

@@ -3,7 +3,7 @@ pub mod socket;
 
 use crate::*;
 use std::{
-    cell::{LazyCell, OnceCell},
+    cell::{LazyCell, OnceCell, RefCell},
     ptr::null_mut,
     rc::Rc,
     task::Waker,
@@ -64,8 +64,6 @@ impl IoPort {
             None
         };
         if let Some(overlapped) = OverlappedWaker::from_raw(overlapped_ptr as _) {
-            let overlapped =
-                unsafe { (Rc::as_ptr(&overlapped) as *mut OverlappedWaker).as_mut() }.unwrap();
             if let Some(err) = err {
                 overlapped.set_err(err);
             }
@@ -85,33 +83,33 @@ impl Drop for IoPort {
 #[repr(C)]
 pub struct OverlappedWaker {
     overlapped: OVERLAPPED,
-    waker: Option<Waker>,
-    err: IoResult<()>,
+    waker: RefCell<Option<Waker>>,
+    err: RefCell<Option<IoError>>,
 }
 
 impl OverlappedWaker {
     pub fn new() -> Self {
         Self {
             overlapped: unsafe { std::mem::zeroed() },
-            waker: None,
-            err: Ok(()),
+            waker: RefCell::new(None),
+            err: RefCell::new(None),
         }
     }
 
-    pub fn set_waker(&mut self, waker: Waker) -> Option<Waker> {
-        self.waker.replace(waker)
+    pub fn set_waker(&self, waker: Waker) {
+        self.waker.replace(Some(waker));
     }
 
-    pub fn take_waker(&mut self) -> Option<Waker> {
+    pub fn take_waker(&self) -> Option<Waker> {
         self.waker.take()
     }
 
-    pub fn set_err(&mut self, err: IoError) {
-        self.err = Err(err);
+    pub fn set_err(&self, err: IoError) {
+        self.err.replace(Some(err));
     }
 
-    pub fn take_err(&mut self) -> IoResult<()> {
-        std::mem::replace(&mut self.err, Ok(()))
+    pub fn take_err(&self) -> Option<IoError> {
+        self.err.take()
     }
 
     pub fn leak(self: Rc<Self>) -> *const Self {
@@ -142,25 +140,18 @@ impl OverlappedWakerWrapper {
         &self,
         waker: Waker,
         f: impl FnOnce(*mut OVERLAPPED) -> Result<(), E>,
-    ) -> Result<(bool, *mut OVERLAPPED), E> {
+    ) -> Result<(&Rc<OverlappedWaker>, *mut OVERLAPPED), E> {
         let ptr = match self.ptr.get() {
             Some(ptr) => {
-                let ptr = Rc::as_ptr(ptr) as *mut OverlappedWaker;
-                if let Some(overlapped) = unsafe { ptr.as_mut() } {
-                    overlapped.set_waker(waker);
-                }
-                (false, ptr as *mut OVERLAPPED)
+                ptr.set_waker(waker);
+                (ptr, Rc::as_ptr(ptr) as *mut OVERLAPPED)
             }
             None => {
-                let overlapped = self
-                    .ptr
-                    .get_or_init(|| Rc::new(OverlappedWaker::new()))
-                    .clone();
-                let overlapped_ptr = overlapped.leak() as *mut OverlappedWaker;
-                unsafe { overlapped_ptr.as_mut() }.unwrap().set_waker(waker);
-                let ptr = overlapped_ptr as *mut OVERLAPPED;
+                let overlapped = self.ptr.get_or_init(|| Rc::new(OverlappedWaker::new()));
+                overlapped.set_waker(waker);
+                let ptr = overlapped.clone().leak() as *mut OVERLAPPED;
                 f(ptr)?;
-                (true, ptr)
+                (overlapped, ptr)
             }
         };
         Ok(ptr)
