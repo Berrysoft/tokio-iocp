@@ -1,14 +1,17 @@
-use crate::{buf::*, op::*, *};
+use crate::op::*;
 use windows_sys::Win32::{Storage::FileSystem::ReadFile, System::IO::OVERLAPPED};
 
 pub struct ReadAt<T: IoBufMut> {
-    buffer: T,
+    buffer: BufWrapper<T>,
     pos: usize,
 }
 
 impl<T: IoBufMut> ReadAt<T> {
     pub fn new(buffer: T, pos: usize) -> Self {
-        Self { buffer, pos }
+        Self {
+            buffer: BufWrapper::new(buffer),
+            pos,
+        }
     }
 }
 
@@ -20,22 +23,18 @@ impl<T: IoBufMut> IocpOperation for ReadAt<T> {
         if let Some(overlapped) = overlapped_ptr.as_mut() {
             overlapped.Anonymous.Anonymous.Offset = self.pos as _;
         }
-        let mut read = 0;
-        let res = ReadFile(
-            handle as _,
-            self.buffer.as_buf_mut_ptr() as _,
-            self.buffer.buf_len() as _,
-            &mut read,
-            overlapped_ptr,
-        );
+        let res = self.buffer.with_buf_mut(|ptr, len| {
+            let mut read = 0;
+            ReadFile(handle as _, ptr as _, len as _, &mut read, overlapped_ptr)
+        });
         win32_result(res)
     }
 
     fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
-        (Ok(res), self.buffer.take())
+        (Ok(res), self.buffer.take_buf())
     }
 
     fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
-        (Err(err), self.buffer.take())
+        (Err(err), self.buffer.take_buf())
     }
 }

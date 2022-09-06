@@ -1,14 +1,17 @@
-use crate::{buf::*, op::*, *};
+use crate::op::*;
 use windows_sys::Win32::{Storage::FileSystem::WriteFile, System::IO::OVERLAPPED};
 
 pub struct WriteAt<T: IoBuf> {
-    buffer: T,
+    buffer: BufWrapper<T>,
     pos: usize,
 }
 
 impl<T: IoBuf> WriteAt<T> {
     pub fn new(buffer: T, pos: usize) -> Self {
-        Self { buffer, pos }
+        Self {
+            buffer: BufWrapper::new(buffer),
+            pos,
+        }
     }
 }
 
@@ -20,22 +23,24 @@ impl<T: IoBuf> IocpOperation for WriteAt<T> {
         if let Some(overlapped) = overlapped_ptr.as_mut() {
             overlapped.Anonymous.Anonymous.Offset = self.pos as _;
         }
-        let mut written = 0;
-        let res = WriteFile(
-            handle as _,
-            self.buffer.as_buf_ptr() as _,
-            self.buffer.buf_len() as _,
-            &mut written,
-            overlapped_ptr,
-        );
+        let res = self.buffer.with_buf(|ptr, len| {
+            let mut written = 0;
+            WriteFile(
+                handle as _,
+                ptr as _,
+                len as _,
+                &mut written,
+                overlapped_ptr,
+            )
+        });
         win32_result(res)
     }
 
     fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
-        (Ok(res), self.buffer.take())
+        (Ok(res), self.buffer.take_buf())
     }
 
     fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
-        (Err(err), self.buffer.take())
+        (Err(err), self.buffer.take_buf())
     }
 }

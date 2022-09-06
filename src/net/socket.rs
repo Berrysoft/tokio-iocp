@@ -101,7 +101,7 @@ impl Socket {
     }
 
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
-        SocketFuture::new(self.as_socket(), Recv::new(buffer)).await
+        SocketFuture::new(self.as_socket(), RecvOne::new(buffer)).await
     }
 
     pub async fn recv_vectored<T: IoBufMut>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
@@ -109,7 +109,7 @@ impl Socket {
     }
 
     pub async fn send<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
-        SocketFuture::new(self.as_socket(), Send::new(buffer)).await
+        SocketFuture::new(self.as_socket(), SendOne::new(buffer)).await
     }
 
     pub async fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
@@ -117,7 +117,7 @@ impl Socket {
     }
 
     pub async fn recv_from<T: IoBufMut>(&self, buffer: T) -> BufResult<(usize, SocketAddr), T> {
-        SocketFuture::new(self.as_socket(), RecvFrom::new(buffer)).await
+        SocketFuture::new(self.as_socket(), RecvFromOne::new(buffer)).await
     }
 
     pub async fn recv_from_vectored<T: IoBufMut>(
@@ -128,7 +128,7 @@ impl Socket {
     }
 
     pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> BufResult<usize, T> {
-        SocketFuture::new(self.as_socket(), SendTo::new(buffer, addr)).await
+        SocketFuture::new(self.as_socket(), SendToOne::new(buffer, addr)).await
     }
 
     pub async fn send_to_vectored<T: IoBuf>(
