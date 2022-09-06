@@ -35,6 +35,7 @@ impl File {
         let file = Self {
             handle: OpenOptions::new()
                 .create(true)
+                .read(true)
                 .write(true)
                 .custom_flags(FILE_FLAG_OVERLAPPED)
                 .open(path)?
