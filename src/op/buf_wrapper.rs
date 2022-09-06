@@ -5,7 +5,7 @@ pub struct BufWrapper<T> {
     buffer: Option<T>,
 }
 
-impl<T: IoBuf> WithBuf for BufWrapper<T> {
+impl<T: IoBuf> WrapBuf for BufWrapper<T> {
     type Buffer = T;
 
     fn new(buffer: Self::Buffer) -> Self {
@@ -14,21 +14,25 @@ impl<T: IoBuf> WithBuf for BufWrapper<T> {
         }
     }
 
-    fn with_buf<R>(&self, f: impl FnOnce(*const u8, usize) -> R) -> R {
-        let buffer = self.buffer.as_ref().unwrap();
-        f(buffer.as_buf_ptr(), buffer.buf_len())
-    }
-
     fn take_buf(&mut self) -> Self::Buffer {
         self.buffer.take().unwrap()
     }
 }
 
-impl<T: IoBufMut> WithBufMut for BufWrapper<T> {
+impl<T: IoBuf> WithBuf for BufWrapper<T> {
+    fn with_buf<R>(&self, f: impl FnOnce(*const u8, usize) -> R) -> R {
+        let buffer = self.buffer.as_ref().unwrap();
+        f(buffer.as_buf_ptr(), buffer.buf_len())
+    }
+}
+
+impl<T: IoBufMut> WrapBufMut for BufWrapper<T> {
     fn set_len(&mut self, len: usize) {
         self.buffer.as_mut().unwrap().set_buf_len(len)
     }
+}
 
+impl<T: IoBufMut> WithBufMut for BufWrapper<T> {
     fn with_buf_mut<R>(&mut self, f: impl FnOnce(*mut u8, usize) -> R) -> R {
         let buffer = self.buffer.as_mut().unwrap();
         f(buffer.as_buf_mut_ptr(), buffer.buf_capacity())
@@ -61,15 +65,11 @@ pub struct VectoredBufWrapper<T> {
     buffer: Vec<T>,
 }
 
-impl<T: IoBuf> WithBuf for VectoredBufWrapper<T> {
+impl<T: IoBuf> WrapBuf for VectoredBufWrapper<T> {
     type Buffer = Vec<T>;
 
     fn new(buffer: Self::Buffer) -> Self {
         Self { buffer }
-    }
-
-    fn with_buf<R>(&self, _f: impl FnOnce(*const u8, usize) -> R) -> R {
-        unimplemented!()
     }
 
     fn take_buf(&mut self) -> Self::Buffer {
@@ -91,7 +91,7 @@ impl<T: IoBuf> WithWsaBuf for VectoredBufWrapper<T> {
     }
 }
 
-impl<T: IoBufMut> WithBufMut for VectoredBufWrapper<T> {
+impl<T: IoBufMut> WrapBufMut for VectoredBufWrapper<T> {
     fn set_len(&mut self, mut len: usize) {
         for buf in self.buffer.iter_mut() {
             let capacity = buf.buf_capacity();
@@ -103,10 +103,6 @@ impl<T: IoBufMut> WithBufMut for VectoredBufWrapper<T> {
                 len = 0;
             }
         }
-    }
-
-    fn with_buf_mut<R>(&mut self, _f: impl FnOnce(*mut u8, usize) -> R) -> R {
-        unimplemented!()
     }
 }
 
