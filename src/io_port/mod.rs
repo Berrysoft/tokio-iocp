@@ -5,6 +5,7 @@ use crate::*;
 use std::{
     cell::{LazyCell, OnceCell},
     ptr::null_mut,
+    rc::Rc,
     task::Waker,
 };
 use windows_sys::Win32::{
@@ -52,17 +53,25 @@ impl IoPort {
                 0,
             )
         };
-        let mut overlapped = OverlappedWaker::from_raw(overlapped_ptr as _);
-        if res == 0 {
+        let err = if res == 0 {
             let error = unsafe { GetLastError() };
             match error {
                 WAIT_TIMEOUT => return,
-                ERROR_HANDLE_EOF => {}
-                _ => overlapped.set_err(IoError::from_raw_os_error(error as _)),
+                ERROR_HANDLE_EOF => None,
+                _ => Some(IoError::from_raw_os_error(error as _)),
             }
-        }
-        if let Some(waker) = overlapped.take_waker() {
-            waker.wake()
+        } else {
+            None
+        };
+        if let Some(overlapped) = OverlappedWaker::from_raw(overlapped_ptr as _) {
+            let overlapped =
+                unsafe { (Rc::as_ptr(&overlapped) as *mut OverlappedWaker).as_mut() }.unwrap();
+            if let Some(err) = err {
+                overlapped.set_err(err);
+            }
+            if let Some(waker) = overlapped.take_waker() {
+                waker.wake();
+            }
         }
     }
 }
@@ -105,18 +114,21 @@ impl OverlappedWaker {
         std::mem::replace(&mut self.err, Ok(()))
     }
 
-    pub fn leak(self) -> *mut Self {
-        let this = Box::new(self);
-        Box::into_raw(this)
+    pub fn leak(self: Rc<Self>) -> *const Self {
+        Rc::into_raw(self)
     }
 
-    pub fn from_raw(p: *mut Self) -> Box<Self> {
-        unsafe { Box::from_raw(p) }
+    pub fn from_raw(p: *const Self) -> Option<Rc<Self>> {
+        if p.is_null() {
+            None
+        } else {
+            Some(unsafe { Rc::from_raw(p) })
+        }
     }
 }
 
 pub struct OverlappedWakerWrapper {
-    ptr: OnceCell<*mut OverlappedWaker>,
+    ptr: OnceCell<Rc<OverlappedWaker>>,
 }
 
 impl OverlappedWakerWrapper {
@@ -132,17 +144,20 @@ impl OverlappedWakerWrapper {
         f: impl FnOnce(*mut OVERLAPPED) -> Result<(), E>,
     ) -> Result<(bool, *mut OVERLAPPED), E> {
         let ptr = match self.ptr.get() {
-            Some(&ptr) => {
+            Some(ptr) => {
+                let ptr = Rc::as_ptr(ptr) as *mut OverlappedWaker;
                 if let Some(overlapped) = unsafe { ptr.as_mut() } {
                     overlapped.set_waker(waker);
                 }
                 (false, ptr as *mut OVERLAPPED)
             }
             None => {
-                let mut overlapped = Box::new(OverlappedWaker::new());
-                overlapped.set_waker(waker);
-                let overlapped_ptr = overlapped.leak();
-                self.ptr.set(overlapped_ptr).unwrap();
+                let overlapped = self
+                    .ptr
+                    .get_or_init(|| Rc::new(OverlappedWaker::new()))
+                    .clone();
+                let overlapped_ptr = overlapped.leak() as *mut OverlappedWaker;
+                unsafe { overlapped_ptr.as_mut() }.unwrap().set_waker(waker);
                 let ptr = overlapped_ptr as *mut OVERLAPPED;
                 f(ptr)?;
                 (true, ptr)

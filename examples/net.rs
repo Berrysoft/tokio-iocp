@@ -3,7 +3,7 @@ use tokio_iocp::net::{TcpListener, TcpStream};
 
 fn main() {
     tokio_iocp::start(async {
-        let listener = TcpListener::bind(("127.0.0.1".parse::<IpAddr>().unwrap(), 10086)).unwrap();
+        let listener = TcpListener::bind(("127.0.0.1".parse::<IpAddr>().unwrap(), 0)).unwrap();
         let addr = listener.local_addr().unwrap();
 
         let task = tokio_iocp::spawn(async move {
