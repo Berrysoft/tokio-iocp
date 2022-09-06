@@ -1,12 +1,10 @@
-use std::net::IpAddr;
+use std::net::Ipv4Addr;
 use tokio::net::{TcpListener, TcpStream};
 
 #[test]
 fn use_tokio_types_from_runtime() {
     tokio_iocp::start(async {
-        let listener = TcpListener::bind(("127.0.0.1".parse::<IpAddr>().unwrap(), 10086))
-            .await
-            .unwrap();
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
         let addr = listener.local_addr().unwrap();
 
         let task = tokio_iocp::spawn(async move {

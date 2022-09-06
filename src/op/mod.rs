@@ -42,7 +42,7 @@ pub unsafe fn win32_result(res: i32) -> IoResult<()> {
     if res == 0 {
         let error = GetLastError();
         match error {
-            ERROR_IO_PENDING | ERROR_IO_INCOMPLETE | ERROR_HANDLE_EOF => Ok(()),
+            0 | ERROR_IO_PENDING | ERROR_IO_INCOMPLETE | ERROR_HANDLE_EOF => Ok(()),
             _ => Err(IoError::from_raw_os_error(error as _)),
         }
     } else {
@@ -54,7 +54,7 @@ pub unsafe fn wsa_result(res: i32) -> IoResult<()> {
     if res == 0 {
         let error = WSAGetLastError();
         match error {
-            WSA_IO_PENDING | WSA_IO_INCOMPLETE => Ok(()),
+            0 | WSA_IO_PENDING | WSA_IO_INCOMPLETE => Ok(()),
             _ => Err(IoError::from_raw_os_error(error as _)),
         }
     } else {
