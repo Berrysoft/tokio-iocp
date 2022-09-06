@@ -1,37 +1,65 @@
-use crate::{io_port::*, op::IocpOperation, *};
-use std::{
-    os::windows::prelude::{AsRawHandle, BorrowedHandle},
-    pin::Pin,
-    task::{Context, Poll},
-};
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
     System::IO::GetOverlappedResult,
 };
 
-pub struct FileFuture<'a, Op: IocpOperation> {
-    handle: BorrowedHandle<'a>,
-    op: Op,
-    overlapped_ptr: OverlappedWakerWrapper,
+use crate::{io_port::waker::OverlappedWakerWrapper, op::IocpOperation, *};
+use std::{
+    future::Future,
+    os::windows::io::{AsRawHandle, AsRawSocket, BorrowedHandle, BorrowedSocket},
+    pin::Pin,
+    task::{Context, Poll},
+};
+
+pub enum BorrowedRes<'a> {
+    Handle(BorrowedHandle<'a>),
+    Socket(BorrowedSocket<'a>),
 }
 
-impl<'a, Op: IocpOperation> FileFuture<'a, Op> {
-    pub(crate) fn new(handle: BorrowedHandle<'a>, op: Op) -> Self {
-        Self {
-            handle,
-            op,
-            overlapped_ptr: OverlappedWakerWrapper::new(),
+impl BorrowedRes<'_> {
+    pub fn as_raw_handle(&self) -> usize {
+        match self {
+            Self::Handle(h) => h.as_raw_handle() as _,
+            Self::Socket(h) => h.as_raw_socket() as _,
         }
     }
 }
 
-impl<Op: IocpOperation> Future for FileFuture<'_, Op> {
+impl<'a> From<BorrowedHandle<'a>> for BorrowedRes<'a> {
+    fn from(h: BorrowedHandle<'a>) -> Self {
+        Self::Handle(h)
+    }
+}
+
+impl<'a> From<BorrowedSocket<'a>> for BorrowedRes<'a> {
+    fn from(h: BorrowedSocket<'a>) -> Self {
+        Self::Socket(h)
+    }
+}
+
+pub struct IocpFuture<'a, Op: IocpOperation> {
+    handle: BorrowedRes<'a>,
+    op: Op,
+    overlapped: OverlappedWakerWrapper,
+}
+
+impl<'a, Op: IocpOperation> IocpFuture<'a, Op> {
+    pub fn new(handle: impl Into<BorrowedRes<'a>>, op: Op) -> Self {
+        Self {
+            handle: handle.into(),
+            op,
+            overlapped: OverlappedWakerWrapper::new(),
+        }
+    }
+}
+
+impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
     type Output = BufResult<Op::Output, Op::Buffer>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
         let (overlapped, overlapped_ptr) = match this
-            .overlapped_ptr
+            .overlapped
             .get_and_try_op(cx.waker().clone(), |ptr| unsafe {
                 this.op.operate(this.handle.as_raw_handle() as _, ptr)
             }) {
