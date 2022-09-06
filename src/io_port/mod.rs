@@ -119,13 +119,13 @@ impl OverlappedWakerWrapper {
         &self,
         waker: Waker,
         f: impl FnOnce(*mut OVERLAPPED) -> Result<(), E>,
-    ) -> Result<*mut OVERLAPPED, E> {
+    ) -> Result<(bool, *mut OVERLAPPED), E> {
         let ptr = match self.ptr.get() {
             Some(&ptr) => {
                 if let Some(overlapped) = unsafe { ptr.as_mut() } {
                     overlapped.set_waker(waker);
                 }
-                ptr as *mut OVERLAPPED
+                (false, ptr as *mut OVERLAPPED)
             }
             None => {
                 let mut overlapped = Box::new(OverlappedWaker::new());
@@ -134,7 +134,7 @@ impl OverlappedWakerWrapper {
                 self.ptr.set(overlapped_ptr).unwrap();
                 let ptr = overlapped_ptr as *mut OVERLAPPED;
                 f(ptr)?;
-                ptr
+                (true, ptr)
             }
         };
         Ok(ptr)

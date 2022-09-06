@@ -29,7 +29,7 @@ impl<Op: IocpOperation> Future for SocketFuture<'_, Op> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let overlapped_ptr = match this
+        let (first, overlapped_ptr) = match this
             .overlapped_ptr
             .get_and_try_op(cx.waker().clone(), |ptr| unsafe {
                 this.op.operate(this.handle.as_raw_socket() as _, ptr)
@@ -37,6 +37,9 @@ impl<Op: IocpOperation> Future for SocketFuture<'_, Op> {
             Ok(ptr) => ptr,
             Err(e) => return Poll::Ready(this.op.error(e)),
         };
+        if first {
+            return Poll::Pending;
+        }
         let mut transferred = 0;
         let res = unsafe {
             let mut flags = 0;
