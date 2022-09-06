@@ -1,6 +1,6 @@
 use crate::{buf::*, net::socket::Socket, *};
 use std::net::SocketAddr;
-use windows_sys::Win32::Networking::WinSock::SOCK_DGRAM;
+use windows_sys::Win32::Networking::WinSock::{IPPROTO_UDP, SOCK_DGRAM};
 
 pub struct UdpSocket {
     inner: Socket,
@@ -9,7 +9,7 @@ pub struct UdpSocket {
 impl UdpSocket {
     pub fn bind(addr: SocketAddr) -> IoResult<Self> {
         Ok(Self {
-            inner: Socket::bind(addr, SOCK_DGRAM)?,
+            inner: Socket::bind(addr, SOCK_DGRAM, IPPROTO_UDP)?,
         })
     }
 

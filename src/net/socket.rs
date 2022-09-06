@@ -15,7 +15,7 @@ use std::{
 };
 use windows_sys::Win32::Networking::WinSock::{
     bind, connect, socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup, ADDRESS_FAMILY,
-    AF_INET, AF_INET6, INVALID_SOCKET,
+    AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO,
 };
 
 struct WSAInit;
@@ -54,10 +54,10 @@ const fn get_domain(addr: SocketAddr) -> ADDRESS_FAMILY {
 }
 
 impl Socket {
-    fn new(family: ADDRESS_FAMILY, ty: i32) -> IoResult<Self> {
+    fn new(family: ADDRESS_FAMILY, ty: i32, protocol: IPPROTO) -> IoResult<Self> {
         WSA_INIT.get_or_init(WSAInit::init);
 
-        let handle = unsafe { socket(family as _, ty, 0) };
+        let handle = unsafe { socket(family as _, ty, protocol) };
         if handle != INVALID_SOCKET {
             let socket = Self {
                 handle: unsafe { OwnedSocket::from_raw_socket(handle as _) },
@@ -73,8 +73,8 @@ impl Socket {
         IO_PORT.attach(self.handle.as_raw_socket() as _)
     }
 
-    pub fn bind(addr: SocketAddr, ty: u16) -> IoResult<Self> {
-        let socket = Self::new(get_domain(addr), ty as _)?;
+    pub fn bind(addr: SocketAddr, ty: u16, protocol: i32) -> IoResult<Self> {
+        let socket = Self::new(get_domain(addr), ty as _, protocol)?;
         let res = unsafe {
             wsa_exact_addr(addr, |addr, len| {
                 bind(socket.as_raw_socket() as _, addr, len)
