@@ -7,9 +7,6 @@ pub mod send;
 pub mod send_to;
 pub mod write_at;
 
-mod buf_wrapper;
-pub use buf_wrapper::*;
-
 use crate::{buf::*, *};
 use std::{
     net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
