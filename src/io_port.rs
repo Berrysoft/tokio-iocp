@@ -1,5 +1,9 @@
 use crate::*;
-use std::{cell::LazyCell, ptr::null_mut, task::Waker};
+use std::{
+    cell::{LazyCell, OnceCell},
+    ptr::null_mut,
+    task::Waker,
+};
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE},
     System::IO::{CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED},
@@ -91,5 +95,39 @@ impl OverlappedWaker {
     }
 }
 
-unsafe impl Send for OverlappedWaker {}
-unsafe impl Sync for OverlappedWaker {}
+pub struct OverlappedWakerWrapper {
+    ptr: OnceCell<*mut OverlappedWaker>,
+}
+
+impl OverlappedWakerWrapper {
+    pub fn new() -> Self {
+        Self {
+            ptr: OnceCell::new(),
+        }
+    }
+
+    pub fn get_and_try_op<E>(
+        &self,
+        waker: Waker,
+        f: impl FnOnce(*mut OVERLAPPED) -> Result<(), E>,
+    ) -> Result<*mut OVERLAPPED, E> {
+        let ptr = match self.ptr.get() {
+            Some(&ptr) => {
+                if let Some(overlapped) = unsafe { ptr.as_mut() } {
+                    overlapped.set_waker(waker);
+                }
+                ptr as *mut OVERLAPPED
+            }
+            None => {
+                let mut overlapped = Box::new(OverlappedWaker::new());
+                overlapped.set_waker(waker);
+                let overlapped_ptr = overlapped.leak();
+                self.ptr.set(overlapped_ptr).unwrap();
+                let ptr = overlapped_ptr as *mut OVERLAPPED;
+                f(ptr)?;
+                ptr
+            }
+        };
+        Ok(ptr)
+    }
+}

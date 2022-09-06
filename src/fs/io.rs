@@ -1,21 +1,22 @@
-use crate::{io_port::OverlappedWakerWrapper, op::*, *};
+use crate::{io_port::OverlappedWakerWrapper, op::IocpOperation, *};
 use std::{
-    os::windows::prelude::{AsRawSocket, BorrowedSocket},
+    os::windows::prelude::{AsRawHandle, BorrowedHandle},
     pin::Pin,
     task::{Context, Poll},
 };
-use windows_sys::Win32::Networking::WinSock::{
-    WSAGetLastError, WSAGetOverlappedResult, WSA_IO_INCOMPLETE,
+use windows_sys::Win32::{
+    Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
+    System::IO::GetOverlappedResult,
 };
 
-pub struct SocketAsyncIo<'a, Op: IocpOperation> {
-    handle: BorrowedSocket<'a>,
+pub struct FileAsyncIo<'a, Op: IocpOperation> {
+    handle: BorrowedHandle<'a>,
     op: Op,
     overlapped_ptr: OverlappedWakerWrapper,
 }
 
-impl<'a, Op: IocpOperation> SocketAsyncIo<'a, Op> {
-    pub(crate) fn new(handle: BorrowedSocket<'a>, op: Op) -> Self {
+impl<'a, Op: IocpOperation> FileAsyncIo<'a, Op> {
+    pub(crate) fn new(handle: BorrowedHandle<'a>, op: Op) -> Self {
         Self {
             handle,
             op,
@@ -24,7 +25,7 @@ impl<'a, Op: IocpOperation> SocketAsyncIo<'a, Op> {
     }
 }
 
-impl<Op: IocpOperation> Future for SocketAsyncIo<'_, Op> {
+impl<Op: IocpOperation> Future for FileAsyncIo<'_, Op> {
     type Output = BufResult<Op::Output, Op::Buffer>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -32,26 +33,25 @@ impl<Op: IocpOperation> Future for SocketAsyncIo<'_, Op> {
         let overlapped_ptr = match this
             .overlapped_ptr
             .get_and_try_op(cx.waker().clone(), |ptr| unsafe {
-                this.op.operate(this.handle.as_raw_socket() as _, ptr)
+                this.op.operate(this.handle.as_raw_handle() as _, ptr)
             }) {
             Ok(ptr) => ptr,
             Err(e) => return Poll::Ready(this.op.error(e)),
         };
         let mut transferred = 0;
         let res = unsafe {
-            let mut flags = 0;
-            WSAGetOverlappedResult(
-                this.handle.as_raw_socket() as _,
-                overlapped_ptr as _,
+            GetOverlappedResult(
+                this.handle.as_raw_handle() as _,
+                overlapped_ptr,
                 &mut transferred,
                 0,
-                &mut flags,
             )
         };
         if res == 0 {
-            let error = unsafe { WSAGetLastError() };
+            let error = unsafe { GetLastError() };
             match error {
-                WSA_IO_INCOMPLETE => Poll::Pending,
+                ERROR_IO_INCOMPLETE => Poll::Pending,
+                ERROR_HANDLE_EOF => Poll::Ready(this.op.result(0)),
                 _ => Poll::Ready(this.op.error(IoError::from_raw_os_error(error as _))),
             }
         } else {
