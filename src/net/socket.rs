@@ -1,8 +1,6 @@
-mod io;
-
 use crate::{
     buf::*,
-    io_port::IO_PORT,
+    io_port::{socket::*, IO_PORT},
     op::{recv::*, send::*, send_to::*, wsa_exact_addr},
     *,
 };
@@ -19,8 +17,6 @@ use windows_sys::Win32::Networking::WinSock::{
     bind, connect, socket, WSACleanup, WSAData, WSAGetLastError, WSAStartup, ADDRESS_FAMILY,
     AF_INET, AF_INET6, INVALID_SOCKET,
 };
-
-use self::io::SocketAsyncIo;
 
 struct WSAInit;
 
@@ -104,32 +100,32 @@ impl Socket {
         }
     }
 
-    pub fn recv<T: IoBufMut>(&self, buffer: T) -> SocketAsyncIo<Recv<T>> {
-        SocketAsyncIo::new(self.as_socket(), Recv::new(buffer))
+    pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
+        SocketFuture::new(self.as_socket(), Recv::new(buffer)).await
     }
 
-    pub fn recv_vectored<T: IoBufMut>(&self, buffer: Vec<T>) -> SocketAsyncIo<RecvVectored<T>> {
-        SocketAsyncIo::new(self.as_socket(), RecvVectored::new(buffer))
+    pub async fn recv_vectored<T: IoBufMut>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
+        SocketFuture::new(self.as_socket(), RecvVectored::new(buffer)).await
     }
 
-    pub fn send<T: IoBuf>(&self, buffer: T) -> SocketAsyncIo<Send<T>> {
-        SocketAsyncIo::new(self.as_socket(), Send::new(buffer))
+    pub async fn send<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
+        SocketFuture::new(self.as_socket(), Send::new(buffer)).await
     }
 
-    pub fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> SocketAsyncIo<SendVectored<T>> {
-        SocketAsyncIo::new(self.as_socket(), SendVectored::new(buffer))
+    pub async fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
+        SocketFuture::new(self.as_socket(), SendVectored::new(buffer)).await
     }
 
-    pub fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> SocketAsyncIo<SendTo<T>> {
-        SocketAsyncIo::new(self.as_socket(), SendTo::new(buffer, addr))
+    pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> BufResult<usize, T> {
+        SocketFuture::new(self.as_socket(), SendTo::new(buffer, addr)).await
     }
 
-    pub fn send_to_vectored<T: IoBuf>(
+    pub async fn send_to_vectored<T: IoBuf>(
         &self,
         buffer: Vec<T>,
         addr: SocketAddr,
-    ) -> SocketAsyncIo<SendToVectored<T>> {
-        SocketAsyncIo::new(self.as_socket(), SendToVectored::new(buffer, addr))
+    ) -> BufResult<usize, Vec<T>> {
+        SocketFuture::new(self.as_socket(), SendToVectored::new(buffer, addr)).await
     }
 }
 
