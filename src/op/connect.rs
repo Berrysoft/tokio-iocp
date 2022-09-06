@@ -28,7 +28,7 @@ impl IocpOperation for Connect {
         let res = wsa_exact_addr(self.addr, |addr, len| {
             connect_fn.unwrap()(handle, addr, len, null(), 0, &mut sent, overlapped_ptr)
         });
-        wsa_result(res)
+        win32_result(res)
     }
 
     fn set_buf_len(&mut self, _len: usize) {}

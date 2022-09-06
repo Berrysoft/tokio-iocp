@@ -17,8 +17,8 @@ use windows_sys::{
     Win32::{
         Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING},
         Networking::WinSock::{
-            WSAGetLastError, WSAIoctl, AF_INET, AF_INET6, SIO_GET_EXTENSION_FUNCTION_POINTER,
-            SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, WSA_IO_INCOMPLETE, WSA_IO_PENDING,
+            WSAIoctl, AF_INET, AF_INET6, SIO_GET_EXTENSION_FUNCTION_POINTER, SOCKADDR, SOCKADDR_IN,
+            SOCKADDR_IN6,
         },
         System::IO::OVERLAPPED,
     },
@@ -40,18 +40,6 @@ pub unsafe fn win32_result(res: i32) -> IoResult<()> {
         let error = GetLastError();
         match error {
             0 | ERROR_IO_PENDING | ERROR_IO_INCOMPLETE | ERROR_HANDLE_EOF => Ok(()),
-            _ => Err(IoError::from_raw_os_error(error as _)),
-        }
-    } else {
-        Ok(())
-    }
-}
-
-pub unsafe fn wsa_result(res: i32) -> IoResult<()> {
-    if res == 0 {
-        let error = WSAGetLastError();
-        match error {
-            0 | WSA_IO_PENDING | WSA_IO_INCOMPLETE => Ok(()),
             _ => Err(IoError::from_raw_os_error(error as _)),
         }
     } else {
@@ -141,6 +129,6 @@ pub unsafe fn get_wsa_fn<F>(handle: usize, fguid: GUID) -> IoResult<Option<F>> {
     if res == 0 {
         Ok(fptr)
     } else {
-        Err(IoError::from_raw_os_error(WSAGetLastError()))
+        Err(IoError::last_os_error())
     }
 }

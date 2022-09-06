@@ -31,7 +31,7 @@ impl<T: WithWsaBufMut> IocpOperation for Recv<T> {
                 None,
             )
         });
-        wsa_result(res)
+        win32_result(res)
     }
 
     fn set_buf_len(&mut self, len: usize) {

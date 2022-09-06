@@ -47,7 +47,7 @@ impl IocpOperation for Accept {
             &mut received,
             overlapped_ptr,
         );
-        wsa_result(res)
+        win32_result(res)
     }
 
     fn set_buf_len(&mut self, _len: usize) {}

@@ -37,7 +37,7 @@ impl<T: WithWsaBuf> IocpOperation for SendTo<T> {
                 )
             })
         });
-        wsa_result(res)
+        win32_result(res)
     }
 
     fn set_buf_len(&mut self, _len: usize) {}

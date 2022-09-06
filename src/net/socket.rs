@@ -18,8 +18,8 @@ use std::{
     ptr::null,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, getsockname, listen, WSACleanup, WSAData, WSAGetLastError, WSASocketW, WSAStartup,
-    ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, WSA_FLAG_OVERLAPPED,
+    bind, getsockname, listen, WSACleanup, WSAData, WSASocketW, WSAStartup, ADDRESS_FAMILY,
+    AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -78,7 +78,7 @@ impl Socket {
             socket.attach()?;
             Ok(socket)
         } else {
-            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
+            Err(IoError::last_os_error())
         }
     }
 
@@ -96,7 +96,7 @@ impl Socket {
         if res == 0 {
             Ok(socket)
         } else {
-            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
+            Err(IoError::last_os_error())
         }
     }
 
@@ -119,7 +119,7 @@ impl Socket {
         if res == 0 {
             Ok(())
         } else {
-            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
+            Err(IoError::last_os_error())
         }
     }
 
@@ -136,7 +136,7 @@ impl Socket {
         if res == 0 {
             Ok(unsafe { wsa_get_addr(name.as_ptr() as _, namelen as _) })
         } else {
-            Err(IoError::from_raw_os_error(unsafe { WSAGetLastError() }))
+            Err(IoError::last_os_error())
         }
     }
 

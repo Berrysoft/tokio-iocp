@@ -22,7 +22,7 @@ impl<T: WithWsaBuf> IocpOperation for Send<T> {
             let mut sent = 0;
             WSASend(handle, ptr, len as _, &mut sent, 0, overlapped_ptr, None)
         });
-        wsa_result(res)
+        win32_result(res)
     }
 
     fn set_buf_len(&mut self, _len: usize) {}
