@@ -40,6 +40,8 @@ impl<T: WithWsaBuf> IocpOperation for SendTo<T> {
         wsa_result(res)
     }
 
+    fn set_buf_len(&mut self, _len: usize) {}
+
     fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
         (Ok(res), self.buffer.take_buf())
     }

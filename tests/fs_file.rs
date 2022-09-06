@@ -5,12 +5,12 @@ use tokio_iocp::fs::File;
 const HELLO: &[u8] = b"hello world...";
 
 async fn read_hello(file: &File) {
-    let buf = vec![0; 1024];
+    let buf = Vec::with_capacity(1024);
     let (res, buf) = file.read_at(buf, 0).await;
     let n = res.unwrap();
 
     assert_eq!(n, HELLO.len());
-    assert_eq!(&buf[..n], HELLO);
+    assert_eq!(&buf, HELLO);
 }
 
 #[test]

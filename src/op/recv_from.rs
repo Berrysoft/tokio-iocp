@@ -69,6 +69,10 @@ impl<T: WithWsaBufMut> IocpOperation for RecvFrom<T> {
         wsa_result(res)
     }
 
+    fn set_buf_len(&mut self, len: usize) {
+        self.buffer.set_len(len)
+    }
+
     fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
         let addr = unsafe { self.get_addr() };
         (Ok((res, addr)), self.buffer.take_buf())

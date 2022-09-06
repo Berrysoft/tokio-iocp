@@ -55,7 +55,9 @@ impl<Op: IocpOperation> Future for SocketFuture<'_, Op> {
                 _ => Poll::Ready(this.op.error(IoError::from_raw_os_error(error as _))),
             }
         } else {
-            Poll::Ready(this.op.result(transferred as _))
+            let transferred = transferred as usize;
+            this.op.set_buf_len(transferred);
+            Poll::Ready(this.op.result(transferred))
         }
     }
 }

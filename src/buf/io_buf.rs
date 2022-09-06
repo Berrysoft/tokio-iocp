@@ -6,6 +6,7 @@
 pub unsafe trait IoBuf: Unpin + 'static {
     fn as_buf_ptr(&self) -> *const u8;
     fn buf_len(&self) -> usize;
+    fn buf_capacity(&self) -> usize;
 }
 
 unsafe impl IoBuf for Vec<u8> {
@@ -16,6 +17,10 @@ unsafe impl IoBuf for Vec<u8> {
     fn buf_len(&self) -> usize {
         self.len()
     }
+
+    fn buf_capacity(&self) -> usize {
+        self.capacity()
+    }
 }
 
 unsafe impl IoBuf for &'static mut [u8] {
@@ -24,6 +29,10 @@ unsafe impl IoBuf for &'static mut [u8] {
     }
 
     fn buf_len(&self) -> usize {
+        self.len()
+    }
+
+    fn buf_capacity(&self) -> usize {
         self.len()
     }
 }
@@ -36,6 +45,10 @@ unsafe impl IoBuf for &'static [u8] {
     fn buf_len(&self) -> usize {
         self.len()
     }
+
+    fn buf_capacity(&self) -> usize {
+        self.len()
+    }
 }
 
 unsafe impl IoBuf for String {
@@ -45,6 +58,10 @@ unsafe impl IoBuf for String {
 
     fn buf_len(&self) -> usize {
         self.len()
+    }
+
+    fn buf_capacity(&self) -> usize {
+        self.capacity()
     }
 }
 
@@ -56,6 +73,10 @@ unsafe impl IoBuf for &'static mut str {
     fn buf_len(&self) -> usize {
         self.len()
     }
+
+    fn buf_capacity(&self) -> usize {
+        self.len()
+    }
 }
 
 unsafe impl IoBuf for &'static str {
@@ -64,6 +85,10 @@ unsafe impl IoBuf for &'static str {
     }
 
     fn buf_len(&self) -> usize {
+        self.len()
+    }
+
+    fn buf_capacity(&self) -> usize {
         self.len()
     }
 }

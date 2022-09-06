@@ -21,6 +21,7 @@ pub trait IocpOperation: Unpin {
     type Buffer: Unpin;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()>;
+    fn set_buf_len(&mut self, len: usize);
 
     fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer>;
     fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer>;
@@ -31,10 +32,12 @@ pub trait WithBuf: Unpin {
 
     fn new(buffer: Self::Buffer) -> Self;
     fn with_buf<R>(&self, f: impl FnOnce(*const u8, usize) -> R) -> R;
+
     fn take_buf(&mut self) -> Self::Buffer;
 }
 
 pub trait WithBufMut: WithBuf {
+    fn set_len(&mut self, len: usize);
     fn with_buf_mut<R>(&mut self, f: impl FnOnce(*mut u8, usize) -> R) -> R;
 }
 
@@ -62,9 +65,13 @@ impl<T: IoBuf> WithBuf for BufWrapper<T> {
 }
 
 impl<T: IoBufMut> WithBufMut for BufWrapper<T> {
+    fn set_len(&mut self, len: usize) {
+        self.buffer.as_mut().unwrap().set_buf_len(len)
+    }
+
     fn with_buf_mut<R>(&mut self, f: impl FnOnce(*mut u8, usize) -> R) -> R {
         let buffer = self.buffer.as_mut().unwrap();
-        f(buffer.as_buf_mut_ptr(), buffer.buf_len())
+        f(buffer.as_buf_mut_ptr(), buffer.buf_capacity())
     }
 }
 
@@ -103,7 +110,7 @@ impl<T: IoBufMut> WithWsaBufMut for BufWrapper<T> {
     fn with_wsa_buf_mut<R>(&mut self, f: impl FnOnce(*const WSABUF, usize) -> R) -> R {
         let buffer = self.buffer.as_mut().unwrap();
         let buffer = WSABUF {
-            len: buffer.buf_len() as _,
+            len: buffer.buf_capacity() as _,
             buf: buffer.as_buf_mut_ptr(),
         };
         f(&buffer, 1)
@@ -145,6 +152,19 @@ impl<T: IoBuf> WithWsaBuf for VectoredBufWrapper<T> {
 }
 
 impl<T: IoBufMut> WithBufMut for VectoredBufWrapper<T> {
+    fn set_len(&mut self, mut len: usize) {
+        for buf in self.buffer.iter_mut() {
+            let capacity = buf.buf_capacity();
+            if len >= capacity {
+                buf.set_buf_len(capacity);
+                len -= capacity;
+            } else {
+                buf.set_buf_len(len);
+                len = 0;
+            }
+        }
+    }
+
     fn with_buf_mut<R>(&mut self, _f: impl FnOnce(*mut u8, usize) -> R) -> R {
         unimplemented!()
     }
@@ -156,7 +176,7 @@ impl<T: IoBufMut> WithWsaBufMut for VectoredBufWrapper<T> {
             .buffer
             .iter_mut()
             .map(|buf| WSABUF {
-                len: buf.buf_len() as _,
+                len: buf.buf_capacity() as _,
                 buf: buf.as_buf_mut_ptr() as _,
             })
             .collect::<Vec<_>>();
