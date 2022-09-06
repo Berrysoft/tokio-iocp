@@ -33,6 +33,17 @@ impl UdpSocket {
         self.inner.send_vectored(buffer).await
     }
 
+    pub async fn recv_from<T: IoBufMut>(&self, buffer: T) -> BufResult<(usize, SocketAddr), T> {
+        self.inner.recv_from(buffer).await
+    }
+
+    pub async fn recv_from_vectored<T: IoBufMut>(
+        &self,
+        buffer: Vec<T>,
+    ) -> BufResult<(usize, SocketAddr), Vec<T>> {
+        self.inner.recv_from_vectored(buffer).await
+    }
+
     pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> BufResult<usize, T> {
         self.inner.send_to(buffer, addr).await
     }

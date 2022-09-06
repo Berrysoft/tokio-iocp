@@ -1,7 +1,7 @@
 use crate::{
     buf::*,
     io_port::{socket::*, IO_PORT},
-    op::{recv::*, send::*, send_to::*, wsa_exact_addr},
+    op::{recv::*, recv_from::*, send::*, send_to::*, wsa_exact_addr},
     *,
 };
 use std::{
@@ -114,6 +114,17 @@ impl Socket {
 
     pub async fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
         SocketFuture::new(self.as_socket(), SendVectored::new(buffer)).await
+    }
+
+    pub async fn recv_from<T: IoBufMut>(&self, buffer: T) -> BufResult<(usize, SocketAddr), T> {
+        SocketFuture::new(self.as_socket(), RecvFrom::new(buffer)).await
+    }
+
+    pub async fn recv_from_vectored<T: IoBufMut>(
+        &self,
+        buffer: Vec<T>,
+    ) -> BufResult<(usize, SocketAddr), Vec<T>> {
+        SocketFuture::new(self.as_socket(), RecvFromVectored::new(buffer)).await
     }
 
     pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> BufResult<usize, T> {
