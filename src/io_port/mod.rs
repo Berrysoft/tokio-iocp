@@ -53,8 +53,7 @@ impl IoPort {
         let err = if res == 0 {
             let error = unsafe { GetLastError() };
             match error {
-                WAIT_TIMEOUT => return,
-                ERROR_HANDLE_EOF => None,
+                WAIT_TIMEOUT | ERROR_HANDLE_EOF => None,
                 _ => Some(IoError::from_raw_os_error(error as _)),
             }
         } else {
