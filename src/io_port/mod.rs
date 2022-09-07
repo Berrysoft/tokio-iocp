@@ -3,9 +3,12 @@ pub use future::IocpFuture;
 mod waker;
 
 use crate::*;
-use std::ptr::null_mut;
+use std::{
+    os::windows::prelude::{AsRawHandle, FromRawHandle, OwnedHandle},
+    ptr::null_mut,
+};
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE, WAIT_TIMEOUT},
+    Foundation::{GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE, WAIT_TIMEOUT},
     System::IO::{CreateIoCompletionPort, GetQueuedCompletionStatus},
 };
 
@@ -15,7 +18,7 @@ thread_local! {
 
 #[derive(Debug)]
 pub struct IoPort {
-    port: isize,
+    port: OwnedHandle,
 }
 
 impl IoPort {
@@ -24,12 +27,16 @@ impl IoPort {
         if port == 0 {
             Err(IoError::last_os_error())
         } else {
-            Ok(Self { port })
+            Ok(Self {
+                port: unsafe { OwnedHandle::from_raw_handle(port as _) },
+            })
         }
     }
 
     pub fn attach(&self, handle: usize) -> IoResult<()> {
-        let port = unsafe { CreateIoCompletionPort(handle as isize, self.port, 0, 0) };
+        let port = unsafe {
+            CreateIoCompletionPort(handle as isize, self.port.as_raw_handle() as _, 0, 0)
+        };
         if port == 0 {
             Err(IoError::last_os_error())
         } else {
@@ -43,7 +50,7 @@ impl IoPort {
         let mut overlapped_ptr = null_mut();
         let res = unsafe {
             GetQueuedCompletionStatus(
-                self.port,
+                self.port.as_raw_handle() as _,
                 &mut transferred,
                 &mut key,
                 &mut overlapped_ptr,
@@ -67,11 +74,5 @@ impl IoPort {
                 waker.wake();
             }
         }
-    }
-}
-
-impl Drop for IoPort {
-    fn drop(&mut self) {
-        unsafe { CloseHandle(self.port) };
     }
 }
