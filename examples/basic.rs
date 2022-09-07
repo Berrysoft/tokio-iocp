@@ -1,7 +1,7 @@
 use tempfile::NamedTempFile;
-use tokio_iocp::fs::File;
+use tokio_iocp::{fs::File, IoResult};
 
-fn main() -> std::io::Result<()> {
+fn main() -> IoResult<()> {
     tokio_iocp::start(async {
         let file = File::open("Cargo.toml")?;
         let buf = Vec::with_capacity(400);
