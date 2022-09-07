@@ -44,7 +44,7 @@ fn complete_ops_on_drop() {
     std::io::Write::write_all(&mut file, &vec).unwrap();
 
     let file = tokio_iocp::start(async {
-        let file = File::create(tempfile.path()).unwrap();
+        let file = File::open(tempfile.path()).unwrap();
         poll_once(async {
             file.read_at(
                 MyBuf {

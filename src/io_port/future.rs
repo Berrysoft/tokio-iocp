@@ -6,7 +6,7 @@ use windows_sys::Win32::{
 use crate::{io_port::waker::OverlappedWakerWrapper, op::IocpOperation, *};
 use std::{
     future::Future,
-    os::windows::io::{AsRawHandle, AsRawSocket, BorrowedHandle, BorrowedSocket},
+    os::windows::prelude::{AsRawHandle, AsRawSocket, BorrowedHandle, BorrowedSocket},
     pin::Pin,
     task::{Context, Poll},
 };
