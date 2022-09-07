@@ -83,7 +83,7 @@ impl Socket {
     }
 
     fn attach(&self) -> IoResult<()> {
-        IO_PORT.with(|port| port.attach(self.handle.as_raw_socket() as _))
+        IO_PORT.with(|port| port.attach(self.as_raw_socket() as _))
     }
 
     pub fn bind(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
@@ -109,13 +109,13 @@ impl Socket {
     }
 
     pub async fn connect(&self, addr: SocketAddr) -> IoResult<()> {
-        IocpFuture::new(self.handle.as_socket(), Connect::new(addr))
+        IocpFuture::new(self.as_socket(), Connect::new(addr))
             .await
             .0
     }
 
     pub fn listen(&self, backlog: i32) -> IoResult<()> {
-        let res = unsafe { listen(self.handle.as_raw_socket() as _, backlog) };
+        let res = unsafe { listen(self.as_raw_socket() as _, backlog) };
         if res == 0 {
             Ok(())
         } else {
@@ -128,7 +128,7 @@ impl Socket {
         let mut namelen: i32 = MAX_ADDR_SIZE as _;
         let res = unsafe {
             getsockname(
-                self.handle.as_raw_socket() as _,
+                self.as_raw_socket() as _,
                 name.as_mut_ptr() as _,
                 &mut namelen,
             )
