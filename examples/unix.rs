@@ -10,13 +10,16 @@ fn main() {
         }
 
         let addr = listener.local_addr().unwrap();
-        println!("Local addr: {}", addr);
 
         let tx = UnixStream::connect_addr(addr).unwrap();
-        let rx = listener.accept().await.unwrap();
+        let (rx, client_addr) = listener.accept().await.unwrap();
+        println!(
+            "Server local addr: {}\nServer peer addr: {}",
+            addr, client_addr
+        );
 
         println!(
-            "Local addr: {}\nPeer addr: {}",
+            "Client local addr: {}\nClient peer addr: {}",
             tx.local_addr().unwrap(),
             tx.peer_addr().unwrap()
         );

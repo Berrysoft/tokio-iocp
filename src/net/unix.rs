@@ -201,13 +201,13 @@ impl UnixListener {
     /// This function will yield once a new Unix domain socket connection
     /// is established. When established, the corresponding [`UnixStream`] and
     /// will be returned.
-    pub async fn accept(&self) -> IoResult<UnixStream> {
-        let (socket, _) = self
+    pub async fn accept(&self) -> IoResult<(UnixStream, UnixSocketAddr)> {
+        let (socket, addr) = self
             .inner
             .accept::<UnixSocketAddr>(SOCK_STREAM, IPPROTO_HOPOPTS)
             .await?;
         let stream = UnixStream { inner: socket };
-        Ok(stream)
+        Ok((stream, addr))
     }
 
     /// Returns the local address that this listener is bound to.

@@ -6,8 +6,9 @@ use crate::{
     *,
 };
 use std::{
-    ops::Deref,
-    os::windows::prelude::{AsHandle, AsRawHandle, OwnedHandle},
+    os::windows::prelude::{
+        AsHandle, AsRawHandle, BorrowedHandle, IntoRawHandle, OwnedHandle, RawHandle,
+    },
     path::Path,
 };
 use windows_sys::Win32::Storage::FileSystem::FlushFileBuffers;
@@ -150,10 +151,20 @@ impl File {
     }
 }
 
-impl Deref for File {
-    type Target = OwnedHandle;
+impl AsRawHandle for File {
+    fn as_raw_handle(&self) -> RawHandle {
+        self.handle.as_raw_handle()
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.handle
+impl IntoRawHandle for File {
+    fn into_raw_handle(self) -> RawHandle {
+        self.handle.into_raw_handle()
+    }
+}
+
+impl AsHandle for File {
+    fn as_handle(&self) -> BorrowedHandle {
+        self.handle.as_handle()
     }
 }

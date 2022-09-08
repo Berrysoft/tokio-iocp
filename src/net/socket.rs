@@ -8,15 +8,14 @@ use crate::{
 use once_cell::sync::OnceCell as OnceLock;
 use std::{
     net::{Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
-    ops::Deref,
-    os::windows::prelude::{AsRawSocket, AsSocket, FromRawSocket, OwnedSocket},
-    ptr::null,
+    os::windows::prelude::{
+        AsRawSocket, AsSocket, BorrowedSocket, FromRawSocket, IntoRawSocket, OwnedSocket, RawSocket,
+    },
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, connect, getpeername, getsockname, listen, shutdown, sockaddr_un, WSACleanup, WSAData,
-    WSASocketW, WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNIX, INVALID_SOCKET, IPPROTO,
+    bind, connect, getpeername, getsockname, listen, shutdown, sockaddr_un, socket, WSACleanup,
+    WSAData, WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNIX, INVALID_SOCKET, IPPROTO,
     SD_BOTH, SD_RECEIVE, SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE, SOCKET,
-    WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -51,8 +50,7 @@ impl Socket {
     pub fn new(addr: ADDRESS_FAMILY, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
         WSA_INIT.get_or_init(WSAInit::init);
 
-        let handle =
-            unsafe { WSASocketW(addr as _, ty as _, protocol, null(), 0, WSA_FLAG_OVERLAPPED) };
+        let handle = unsafe { socket(addr as _, ty as _, protocol) };
         if handle != INVALID_SOCKET {
             let socket = Self {
                 handle: unsafe { OwnedSocket::from_raw_socket(handle as _) },
@@ -212,11 +210,21 @@ impl Socket {
     }
 }
 
-impl Deref for Socket {
-    type Target = OwnedSocket;
+impl AsRawSocket for Socket {
+    fn as_raw_socket(&self) -> RawSocket {
+        self.handle.as_raw_socket()
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.handle
+impl IntoRawSocket for Socket {
+    fn into_raw_socket(self) -> RawSocket {
+        self.handle.into_raw_socket()
+    }
+}
+
+impl AsSocket for Socket {
+    fn as_socket(&self) -> BorrowedSocket {
+        self.handle.as_socket()
     }
 }
 
