@@ -1,21 +1,21 @@
-use crate::op::*;
+use crate::{net::*, op::*};
 use once_cell::sync::OnceCell as OnceLock;
 use std::ptr::null;
 use windows_sys::Win32::Networking::WinSock::LPFN_CONNECTEX;
 
 static CONNECT_EX: OnceLock<LPFN_CONNECTEX> = OnceLock::new();
 
-pub struct Connect {
-    addr: SocketAddr,
+pub struct Connect<A: SockAddr> {
+    addr: A,
 }
 
-impl Connect {
-    pub fn new(addr: SocketAddr) -> Self {
+impl<A: SockAddr> Connect<A> {
+    pub fn new(addr: A) -> Self {
         Self { addr }
     }
 }
 
-impl IocpOperation for Connect {
+impl<A: SockAddr> IocpOperation for Connect<A> {
     type Output = ();
     type Buffer = ();
 
@@ -25,7 +25,7 @@ impl IocpOperation for Connect {
             get_wsa_fn(handle, fguid)
         })?;
         let mut sent = 0;
-        let res = wsa_exact_addr(self.addr, |addr, len| {
+        let res = self.addr.with_native(|addr, len| {
             connect_fn.unwrap()(handle, addr, len, null(), 0, &mut sent, overlapped_ptr)
         });
         win32_result(res)

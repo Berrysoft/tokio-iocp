@@ -9,17 +9,22 @@
 //! * [`UdpSocket`] provides functionality for communication over UDP
 
 mod socket;
+pub(crate) use socket::*;
+
 mod tcp;
+pub use tcp::*;
+
 mod udp;
+pub use udp::*;
+
+mod unix;
+pub use unix::*;
 
 use crate::{IoError, IoResult};
 use std::{
     future::Future,
     net::{SocketAddr, ToSocketAddrs},
 };
-
-pub use tcp::*;
-pub use udp::*;
 
 fn each_addr<T>(
     addr: impl ToSocketAddrs,

@@ -1,14 +1,13 @@
-use crate::op::*;
-use std::net::SocketAddr;
+use crate::{net::*, op::*};
 use windows_sys::Win32::Networking::WinSock::WSASendTo;
 
-pub struct SendTo<T: WithWsaBuf> {
+pub struct SendTo<T: WithWsaBuf, A: SockAddr> {
     buffer: T,
-    addr: SocketAddr,
+    addr: A,
 }
 
-impl<T: WithWsaBuf> SendTo<T> {
-    pub fn new(buffer: T::Buffer, addr: SocketAddr) -> Self {
+impl<T: WithWsaBuf, A: SockAddr> SendTo<T, A> {
+    pub fn new(buffer: T::Buffer, addr: A) -> Self {
         Self {
             buffer: T::new(buffer),
             addr,
@@ -16,14 +15,14 @@ impl<T: WithWsaBuf> SendTo<T> {
     }
 }
 
-impl<T: WithWsaBuf> IocpOperation for SendTo<T> {
+impl<T: WithWsaBuf, A: SockAddr> IocpOperation for SendTo<T, A> {
     type Output = usize;
     type Buffer = T::Buffer;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
         let res = self.buffer.with_wsa_buf(|ptr, len| {
             let mut sent = 0;
-            wsa_exact_addr(self.addr, |addr, addr_len| {
+            self.addr.with_native(|addr, addr_len| {
                 WSASendTo(
                     handle,
                     ptr,
@@ -51,5 +50,5 @@ impl<T: WithWsaBuf> IocpOperation for SendTo<T> {
     }
 }
 
-pub type SendToOne<T> = SendTo<BufWrapper<T>>;
-pub type SendToVectored<T> = SendTo<VectoredBufWrapper<T>>;
+pub type SendToOne<T, A> = SendTo<BufWrapper<T>, A>;
+pub type SendToVectored<T, A> = SendTo<VectoredBufWrapper<T>, A>;
