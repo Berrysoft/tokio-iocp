@@ -7,6 +7,7 @@
 //!
 //! * [`TcpListener`] and [`TcpStream`] provide functionality for communication over TCP
 //! * [`UdpSocket`] provides functionality for communication over UDP
+//! * [`UnixListener`] and [`UnixStream`] provide functionality for communication over UNIX sockets.
 
 mod socket;
 pub(crate) use socket::*;

@@ -5,7 +5,6 @@ use windows_sys::Win32::Networking::WinSock::{AF_UNIX, IPPROTO_HOPOPTS, SOCK_STR
 const UNIX_MAX_PATH: usize = 108;
 
 /// An address associated with a Unix socket.
-/// It is a static sized buffer.
 ///
 /// Socket file path should not be longer than 107 bytes.
 ///
