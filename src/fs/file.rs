@@ -138,10 +138,10 @@ impl File {
         IocpFuture::new(self.as_handle(), WriteAt::new(buffer, pos)).await
     }
 
-    /// Attempts to sync all buffers to disk.
+    /// Attempts to flush write buffers to disk.
     ///
     /// This function will error if the file doesn't have write permission.
-    pub fn sync_all(&self) -> IoResult<()> {
+    pub fn flush(&self) -> IoResult<()> {
         let res = unsafe { FlushFileBuffers(self.as_raw_handle() as _) };
         if res == 0 {
             Err(IoError::last_os_error())
