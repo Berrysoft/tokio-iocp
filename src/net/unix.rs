@@ -151,7 +151,7 @@ enum UnixAddressKind<'a> {
 
 /// A Unix socket server, listening for connections.
 ///
-/// You can accept a new connection by using the [`accept`] method.
+/// You can accept a new connection by using the [`UnixListener::accept`] method.
 ///
 /// # Examples
 ///
