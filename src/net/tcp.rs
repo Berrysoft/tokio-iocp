@@ -1,5 +1,5 @@
 use crate::{buf::*, net::socket::Socket, *};
-use std::net::SocketAddr;
+use std::net::{Shutdown, SocketAddr, ToSocketAddrs};
 use windows_sys::Win32::Networking::WinSock::{IPPROTO_TCP, SOCK_STREAM, SOMAXCONN};
 
 /// A TCP socket server, listening for connections.
@@ -42,10 +42,12 @@ impl TcpListener {
     ///
     /// Binding with a port number of 0 will request that the OS assigns a port
     /// to this listener.
-    pub fn bind(addr: impl Into<SocketAddr>) -> IoResult<Self> {
-        let socket = Socket::bind(addr.into(), SOCK_STREAM, IPPROTO_TCP)?;
-        socket.listen(SOMAXCONN as _)?;
-        Ok(Self { inner: socket })
+    pub fn bind(addr: impl ToSocketAddrs) -> IoResult<Self> {
+        super::each_addr(addr, |addr| {
+            let socket = Socket::bind(addr, SOCK_STREAM, IPPROTO_TCP)?;
+            socket.listen(SOMAXCONN as _)?;
+            Ok(Self { inner: socket })
+        })
     }
 
     /// Accepts a new incoming connection from this listener.
@@ -70,8 +72,7 @@ impl TcpListener {
     /// use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
     /// use tokio_iocp::net::TcpListener;
     ///
-    /// let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-    /// let listener = TcpListener::bind(addr).unwrap();
+    /// let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
     ///
     /// let addr = listener.local_addr().expect("Couldn't get local address");
     /// assert_eq!(addr, SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080)));
@@ -88,14 +89,13 @@ impl TcpListener {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
 /// use tokio_iocp::net::TcpStream;
 /// use std::net::SocketAddr;
 ///
-/// let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
 /// tokio_iocp::start(async {
 ///     // Connect to a peer
-///     let mut stream = TcpStream::connect(addr).await.unwrap();
+///     let mut stream = TcpStream::connect("127.0.0.1:8080").await.unwrap();
 ///
 ///     // Write some data.
 ///     let (result, _) = stream.send("hello world!").await;
@@ -107,29 +107,50 @@ pub struct TcpStream {
 }
 
 impl TcpStream {
-    pub async fn connect(addr: impl Into<SocketAddr>) -> IoResult<Self> {
-        let addr = addr.into();
-        let socket = Socket::bind_any_like(addr, SOCK_STREAM, IPPROTO_TCP)?;
-        socket.connect_ex(addr).await?;
-        Ok(Self { inner: socket })
+    /// Opens a TCP connection to a remote host.
+    pub async fn connect(addr: impl ToSocketAddrs) -> IoResult<Self> {
+        super::each_addr_async(addr, |addr| async move {
+            let socket = Socket::bind_any_like(addr, SOCK_STREAM, IPPROTO_TCP)?;
+            socket.connect_ex(addr).await?;
+            Ok(Self { inner: socket })
+        })
+        .await
     }
 
+    /// Returns the socket address of the local half of this TCP connection.
     pub fn local_addr(&self) -> IoResult<SocketAddr> {
         self.inner.local_addr()
     }
 
+    /// Shuts down the read, write, or both halves of this connection.
+    ///
+    /// This function will cause all pending and future I/O on the specified
+    /// portions to return immediately with an appropriate value (see the
+    /// documentation of [`Shutdown`]).
+    pub fn shutdown(&self, how: Shutdown) -> IoResult<()> {
+        self.inner.shutdown(how)
+    }
+
+    /// Receives a packet of data from the socket into the buffer, returning the original buffer and
+    /// quantity of data received.
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
         self.inner.recv(buffer).await
     }
 
+    /// Receives a packet of data from the socket into the buffer, returning the original buffer and
+    /// quantity of data received.
     pub async fn recv_vectored<T: IoBufMut>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
         self.inner.recv_vectored(buffer).await
     }
 
+    /// Sends some data to the socket from the buffer, returning the original buffer and
+    /// quantity of data sent.
     pub async fn send<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
         self.inner.send(buffer).await
     }
 
+    /// Sends some data to the socket from the buffer, returning the original buffer and
+    /// quantity of data sent.
     pub async fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
         self.inner.send_vectored(buffer).await
     }

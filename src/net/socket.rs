@@ -9,7 +9,7 @@ use crate::{
 };
 use once_cell::sync::OnceCell as OnceLock;
 use std::{
-    net::{SocketAddr, SocketAddrV4, SocketAddrV6},
+    net::{Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
     ops::Deref,
     os::windows::{
         io::{AsSocket, FromRawSocket, OwnedSocket},
@@ -18,8 +18,9 @@ use std::{
     ptr::null,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, connect, getsockname, listen, WSACleanup, WSAData, WSASocketW, WSAStartup,
-    ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, WSA_FLAG_OVERLAPPED,
+    bind, connect, getsockname, listen, shutdown, WSACleanup, WSAData, WSASocketW, WSAStartup,
+    ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, SD_BOTH, SD_RECEIVE, SD_SEND,
+    WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -166,6 +167,20 @@ impl Socket {
             },
             addr,
         ))
+    }
+
+    pub fn shutdown(&self, how: Shutdown) -> IoResult<()> {
+        let how = match how {
+            Shutdown::Write => SD_SEND,
+            Shutdown::Read => SD_RECEIVE,
+            Shutdown::Both => SD_BOTH,
+        };
+        let res = unsafe { shutdown(self.handle.as_raw_socket() as _, how as _) };
+        if res == 0 {
+            Ok(())
+        } else {
+            Err(IoError::last_os_error())
+        }
     }
 
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {

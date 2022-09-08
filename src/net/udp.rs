@@ -1,5 +1,5 @@
 use crate::{buf::*, net::socket::Socket, *};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use windows_sys::Win32::Networking::WinSock::{IPPROTO_UDP, SOCK_DGRAM};
 
 /// A UDP socket.
@@ -81,9 +81,11 @@ pub struct UdpSocket {
 
 impl UdpSocket {
     /// Creates a new UDP socket and attempt to bind it to the addr provided.
-    pub fn bind(addr: impl Into<SocketAddr>) -> IoResult<Self> {
-        Ok(Self {
-            inner: Socket::bind(addr.into(), SOCK_DGRAM, IPPROTO_UDP)?,
+    pub fn bind(addr: impl ToSocketAddrs) -> IoResult<Self> {
+        super::each_addr(addr, |addr| {
+            Ok(Self {
+                inner: Socket::bind(addr, SOCK_DGRAM, IPPROTO_UDP)?,
+            })
         })
     }
 
@@ -94,8 +96,8 @@ impl UdpSocket {
     /// Note that usually, a successful `connect` call does not specify
     /// that there is a remote server listening on the port, rather, such an
     /// error would only be detected after the first send.
-    pub fn connect(&self, addr: impl Into<SocketAddr>) -> IoResult<()> {
-        self.inner.connect(addr.into())
+    pub fn connect(&self, addr: impl ToSocketAddrs) -> IoResult<()> {
+        super::each_addr(addr, |addr| self.inner.connect(addr))
     }
 
     /// Returns the local address that this socket is bound to.
