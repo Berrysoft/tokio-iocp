@@ -50,8 +50,9 @@ pub mod fs;
 mod io_port;
 pub mod net;
 mod op;
-mod runtime;
+pub mod runtime;
 
+#[doc(no_inline)]
 pub use runtime::spawn;
 #[doc(no_inline)]
 pub use std::io::{Error as IoError, Result as IoResult};

@@ -1,7 +1,10 @@
+//! The runtime of Tokio with IOCP.
+
 use crate::{io_port::IO_PORT, *};
 use std::future::Future;
 use tokio::task::{JoinHandle, LocalSet};
 
+/// The `tokio-iocp` runtime.
 #[derive(Debug)]
 pub struct Runtime {
     rt: tokio::runtime::Runtime,
@@ -9,6 +12,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    /// Creates a new Tokio runtime, with all features enabled.
     pub fn new() -> IoResult<Self> {
         Ok(Self {
             rt: tokio::runtime::Builder::new_current_thread()
@@ -19,6 +23,7 @@ impl Runtime {
         })
     }
 
+    /// Runs a future to completion on the runtime.
     pub fn block_on<F: Future>(&self, future: F) -> F::Output {
         self.local.block_on(&self.rt, future)
     }
