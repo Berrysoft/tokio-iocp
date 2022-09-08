@@ -18,7 +18,8 @@ use std::{
 use windows_sys::Win32::Networking::WinSock::{
     bind, connect, getpeername, getsockname, listen, shutdown, sockaddr_un, WSACleanup, WSAData,
     WSASocketW, WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNIX, INVALID_SOCKET, IPPROTO,
-    SD_BOTH, SD_RECEIVE, SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKET, WSA_FLAG_OVERLAPPED,
+    SD_BOTH, SD_RECEIVE, SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE, SOCKET,
+    WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -222,7 +223,7 @@ impl Deref for Socket {
     }
 }
 
-pub const MAX_ADDR_SIZE: usize = 110;
+pub const MAX_ADDR_SIZE: usize = std::mem::size_of::<SOCKADDR_STORAGE>();
 
 pub trait SockAddr: Sized + Unpin {
     fn domain(&self) -> u16;

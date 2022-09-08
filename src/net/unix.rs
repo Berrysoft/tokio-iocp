@@ -11,25 +11,25 @@ use windows_sys::Win32::Networking::WinSock::{AF_UNIX, SOCK_STREAM};
 ///
 /// ```
 /// use tokio_iocp::net::{UnixListener, UnixStream};
+/// use scopeguard::defer;
 ///
 /// let sock_file = format!("{}/unix-server.sock", std::env::var("TEMP").unwrap());
 ///
 /// tokio_iocp::start(async move {
 ///     let listener = UnixListener::bind(&sock_file).unwrap();
+///     defer! {
+///         std::fs::remove_file(&sock_file).unwrap();
+///     }
 ///
-///     let tx_fut = UnixStream::connect(&sock_file);
-///
-///     let rx_fut = listener.accept();
-///
-///     let (tx, rx) = tokio::try_join!(tx_fut, rx_fut).unwrap();
+///     let tx = UnixStream::connect(&sock_file).unwrap();
+///     let rx = listener.accept().await.unwrap();
 ///
 ///     tx.send("test").await.0.unwrap();
 ///
-///     let (_, buf) = rx.recv(vec![0; 4]).await;
+///     let (res, buf) = rx.recv(vec![0; 4]).await;
+///     res.unwrap();
 ///
 ///     assert_eq!(buf, b"test");
-///
-///     std::fs::remove_file(&sock_file).unwrap();
 /// });
 /// ```
 pub struct UnixListener {
@@ -63,14 +63,16 @@ impl UnixListener {
     /// ```
     /// use tokio_iocp::net::UnixListener;
     /// use std::path::Path;
+    /// use scopeguard::defer;
     ///
     /// let sock_file = format!("{}/unix-server.sock", std::env::var("TEMP").unwrap());
     /// let listener = UnixListener::bind(&sock_file).unwrap();
+    /// defer! {
+    ///     std::fs::remove_file(&sock_file).unwrap();
+    /// }
     ///
     /// let addr = listener.local_addr().expect("Couldn't get local address");
     /// assert_eq!(addr, Path::new(&sock_file));
-    ///
-    /// std::fs::remove_file(&sock_file).unwrap();
     /// ```
     pub fn local_addr(&self) -> IoResult<PathBuf> {
         self.inner.local_addr()
@@ -89,7 +91,7 @@ impl UnixListener {
 ///
 /// tokio_iocp::start(async {
 ///     // Connect to a peer
-///     let mut stream = UnixStream::connect("unix-server.sock").await.unwrap();
+///     let mut stream = UnixStream::connect("unix-server.sock").unwrap();
 ///
 ///     // Write some data.
 ///     let (result, _) = stream.send("hello world!").await;
@@ -104,9 +106,9 @@ impl UnixStream {
     /// Opens a Unix connection to the specified file path. There must be a
     /// `UnixListener` or equivalent listening on the corresponding Unix domain socket
     /// to successfully connect and return a `UnixStream`.
-    pub async fn connect(path: impl AsRef<Path>) -> IoResult<UnixStream> {
+    pub fn connect(path: impl AsRef<Path>) -> IoResult<UnixStream> {
         let socket = Socket::new(AF_UNIX as _, SOCK_STREAM, 0)?;
-        socket.connect_ex(path.as_ref().to_path_buf()).await?;
+        socket.connect(path.as_ref().to_path_buf())?;
         let unix_stream = UnixStream { inner: socket };
         Ok(unix_stream)
     }
