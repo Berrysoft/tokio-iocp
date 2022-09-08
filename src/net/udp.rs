@@ -16,69 +16,64 @@ use windows_sys::Win32::Networking::WinSock::{IPPROTO_UDP, SOCK_DGRAM};
 /// Bind and connect a pair of sockets and send a packet:
 ///
 /// ```
-/// use tokio_iocp::{net::UdpSocket, IoResult};
+/// use tokio_iocp::net::UdpSocket;
 /// use std::net::SocketAddr;
-/// fn main() -> IoResult<()> {
-///     tokio_iocp::start(async {
-///         let first_addr: SocketAddr = "127.0.0.1:2401".parse().unwrap();
-///         let second_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
 ///
-///         // bind sockets
-///         let socket = UdpSocket::bind(first_addr)?;
-///         let other_socket = UdpSocket::bind(second_addr)?;
+/// tokio_iocp::start(async {
+///     let first_addr: SocketAddr = "127.0.0.1:2401".parse().unwrap();
+///     let second_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
 ///
-///         // connect sockets
-///         socket.connect(second_addr)?;
-///         other_socket.connect(first_addr)?;
+///     // bind sockets
+///     let socket = UdpSocket::bind(first_addr).unwrap();
+///     let other_socket = UdpSocket::bind(second_addr).unwrap();
 ///
-///         let buf = Vec::with_capacity(32);
+///     // connect sockets
+///     socket.connect(second_addr).unwrap();
+///     other_socket.connect(first_addr).unwrap();
 ///
-///         // write data
-///         let (result, _) = socket.send("hello world").await;
-///         result?;
+///     let buf = Vec::with_capacity(32);
 ///
-///         // read data
-///         let (result, buf) = other_socket.recv(buf).await;
-///         let n_bytes = result?;
+///     // write data
+///     let (result, _) = socket.send("hello world").await;
+///     result.unwrap();
 ///
-///         assert_eq!(n_bytes, buf.len());
-///         assert_eq!(b"hello world", &buf[..]);
+///     // read data
+///     let (result, buf) = other_socket.recv(buf).await;
+///     let n_bytes = result.unwrap();
 ///
-///         Ok(())
-///     })
-/// }
+///     assert_eq!(n_bytes, buf.len());
+///     assert_eq!(buf, b"hello world");
+//
+/// });
 /// ```
 /// Send and receive packets without connecting:
 ///
 /// ```
-/// use tokio_iocp::{net::UdpSocket, IoResult};
+/// use tokio_iocp::net::UdpSocket;
 /// use std::net::SocketAddr;
-/// fn main() -> IoResult<()> {
-///     tokio_iocp::start(async {
-///         let first_addr: SocketAddr = "127.0.0.1:2401".parse().unwrap();
-///         let second_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
 ///
-///         // bind sockets
-///         let socket = UdpSocket::bind(first_addr)?;
-///         let other_socket = UdpSocket::bind(second_addr)?;
+/// tokio_iocp::start(async {
+///     let first_addr: SocketAddr = "127.0.0.1:2401".parse().unwrap();
+///     let second_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
 ///
-///         let buf = Vec::with_capacity(32);
+///     // bind sockets
+///     let socket = UdpSocket::bind(first_addr).unwrap();
+///     let other_socket = UdpSocket::bind(second_addr).unwrap();
 ///
-///         // write data
-///         let (result, _) = socket.send_to("hello world", second_addr).await;
-///         result?;
+///     let buf = Vec::with_capacity(32);
 ///
-///         // read data
-///         let (result, buf) = other_socket.recv_from(buf).await;
-///         let (n_bytes, addr) = result?;
+///     // write data
+///     let (result, _) = socket.send_to("hello world", second_addr).await;
+///     result.unwrap();
 ///
-///         assert_eq!(addr, first_addr);
-///         assert_eq!(n_bytes, buf.len());
-///         assert_eq!(b"hello world", &buf[..]);
+///     // read data
+///     let (result, buf) = other_socket.recv_from(buf).await;
+///     let (n_bytes, addr) = result.unwrap();
 ///
-///         Ok(())
-///     })
-/// }
+///     assert_eq!(addr, first_addr);
+///     assert_eq!(n_bytes, buf.len());
+///     assert_eq!(buf, b"hello world");
+/// });
 /// ```
 pub struct UdpSocket {
     inner: Socket,
@@ -111,41 +106,48 @@ impl UdpSocket {
     /// use tokio_iocp::{net::UdpSocket, IoResult};
     /// use std::net::SocketAddr;
     ///
-    /// # fn main() -> IoResult<()> {
-    /// # tokio_iocp::start(async {
     /// let addr = "127.0.0.1:8080".parse::<SocketAddr>().unwrap();
-    /// let sock = UdpSocket::bind(addr)?;
+    /// let sock = UdpSocket::bind(addr).unwrap();
     /// // the address the socket is bound to
-    /// let local_addr = sock.local_addr()?;
+    /// let local_addr = sock.local_addr().unwrap();
     /// assert_eq!(local_addr, addr);
-    /// # Ok(())
-    /// # })
-    /// # }
     /// ```
     pub fn local_addr(&self) -> IoResult<SocketAddr> {
         self.inner.local_addr()
     }
 
+    /// Receives a packet of data from the socket into the buffer, returning the original buffer and
+    /// quantity of data received.
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
         self.inner.recv(buffer).await
     }
 
+    /// Receives a packet of data from the socket into the buffer, returning the original buffer and
+    /// quantity of data received.
     pub async fn recv_vectored<T: IoBufMut>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
         self.inner.recv_vectored(buffer).await
     }
 
+    /// Sends some data to the socket from the buffer, returning the original buffer and
+    /// quantity of data sent.
     pub async fn send<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
         self.inner.send(buffer).await
     }
 
+    /// Sends some data to the socket from the buffer, returning the original buffer and
+    /// quantity of data sent.
     pub async fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
         self.inner.send_vectored(buffer).await
     }
 
+    /// Receives a single datagram message on the socket. On success, returns
+    /// the number of bytes received and the origin.
     pub async fn recv_from<T: IoBufMut>(&self, buffer: T) -> BufResult<(usize, SocketAddr), T> {
         self.inner.recv_from(buffer).await
     }
 
+    /// Receives a single datagram message on the socket. On success, returns
+    /// the number of bytes received and the origin.
     pub async fn recv_from_vectored<T: IoBufMut>(
         &self,
         buffer: Vec<T>,
@@ -153,10 +155,14 @@ impl UdpSocket {
         self.inner.recv_from_vectored(buffer).await
     }
 
+    /// Sends data on the socket to the given address. On success, returns the
+    /// number of bytes sent.
     pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> BufResult<usize, T> {
         self.inner.send_to(buffer, addr).await
     }
 
+    /// Sends data on the socket to the given address. On success, returns the
+    /// number of bytes sent.
     pub async fn send_to_vectored<T: IoBuf>(
         &self,
         buffer: Vec<T>,
