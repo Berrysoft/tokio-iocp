@@ -9,10 +9,7 @@ use once_cell::sync::OnceCell as OnceLock;
 use std::{
     net::{Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
     ops::Deref,
-    os::windows::{
-        io::{AsSocket, FromRawSocket, OwnedSocket},
-        prelude::AsRawSocket,
-    },
+    os::windows::prelude::{AsRawSocket, AsSocket, FromRawSocket, OwnedSocket},
     ptr::null,
 };
 use windows_sys::Win32::Networking::WinSock::{

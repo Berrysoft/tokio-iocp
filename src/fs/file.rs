@@ -1,5 +1,3 @@
-use windows_sys::Win32::Storage::FileSystem::FlushFileBuffers;
-
 use crate::{
     buf::*,
     fs::OpenOptions,
@@ -12,6 +10,7 @@ use std::{
     os::windows::prelude::{AsHandle, AsRawHandle, OwnedHandle},
     path::Path,
 };
+use windows_sys::Win32::Storage::FileSystem::FlushFileBuffers;
 
 /// A reference to an open file on the filesystem.
 ///

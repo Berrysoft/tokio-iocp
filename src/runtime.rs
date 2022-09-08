@@ -40,7 +40,7 @@ impl Runtime {
 /// In this example, a server is started and `spawn` is used to start a new task
 /// that processes each received connection.
 ///
-/// ```no_run
+/// ```
 /// tokio_iocp::start(async {
 ///     let handle = tokio_iocp::spawn(async {
 ///         println!("hello from a background task");

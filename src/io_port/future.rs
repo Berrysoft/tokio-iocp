@@ -1,14 +1,13 @@
-use windows_sys::Win32::{
-    Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
-    System::IO::GetOverlappedResult,
-};
-
 use crate::{io_port::waker::OverlappedWakerWrapper, op::IocpOperation, *};
 use std::{
     future::Future,
     os::windows::prelude::{AsRawHandle, AsRawSocket, BorrowedHandle, BorrowedSocket},
     pin::Pin,
     task::{Context, Poll},
+};
+use windows_sys::Win32::{
+    Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
+    System::IO::GetOverlappedResult,
 };
 
 pub enum BorrowedRes<'a> {

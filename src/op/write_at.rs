@@ -1,5 +1,5 @@
 use crate::op::*;
-use windows_sys::Win32::{Storage::FileSystem::WriteFile, System::IO::OVERLAPPED};
+use windows_sys::Win32::Storage::FileSystem::WriteFile;
 
 pub struct WriteAt<T: IoBuf> {
     buffer: BufWrapper<T>,

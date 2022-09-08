@@ -1,4 +1,4 @@
-use crate::{buf::*, net::socket::Socket, *};
+use crate::{buf::*, net::Socket, *};
 use std::net::{Shutdown, SocketAddr, ToSocketAddrs};
 use windows_sys::Win32::Networking::WinSock::{IPPROTO_TCP, SOCK_STREAM, SOMAXCONN};
 
