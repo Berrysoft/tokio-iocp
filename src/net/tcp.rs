@@ -32,7 +32,7 @@ impl TcpStream {
     pub async fn connect(addr: impl Into<SocketAddr>) -> IoResult<Self> {
         let addr = addr.into();
         let socket = Socket::bind_any_like(addr, SOCK_STREAM, IPPROTO_TCP)?;
-        socket.connect(addr).await?;
+        socket.connect_ex(addr).await?;
         Ok(Self { inner: socket })
     }
 

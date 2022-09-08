@@ -18,8 +18,8 @@ use std::{
     ptr::null,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, getsockname, listen, WSACleanup, WSAData, WSASocketW, WSAStartup, ADDRESS_FAMILY,
-    AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, WSA_FLAG_OVERLAPPED,
+    bind, connect, getsockname, listen, WSACleanup, WSAData, WSASocketW, WSAStartup,
+    ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -108,7 +108,21 @@ impl Socket {
         Self::bind(new_addr, ty, protocol)
     }
 
-    pub async fn connect(&self, addr: SocketAddr) -> IoResult<()> {
+    pub fn connect(&self, addr: SocketAddr) -> IoResult<()> {
+        let res = unsafe {
+            wsa_exact_addr(addr, |addr, len| {
+                connect(self.as_raw_socket() as _, addr, len)
+            })
+        };
+        if res == 0 {
+            Ok(())
+        } else {
+            Err(IoError::last_os_error())
+        }
+    }
+
+    pub async fn connect_ex(&self, addr: SocketAddr) -> IoResult<()> {
+        println!("Connect {}", addr);
         IocpFuture::new(self.as_socket(), Connect::new(addr))
             .await
             .0
