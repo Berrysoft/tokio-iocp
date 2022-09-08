@@ -66,3 +66,25 @@ async fn each_addr_async<T, F: Future<Output = IoResult<T>>>(
         )
     }))
 }
+
+macro_rules! impl_socket {
+    ($t:ty, $inner:ident) => {
+        impl ::std::os::windows::io::AsRawSocket for $t {
+            fn as_raw_socket(&self) -> ::std::os::windows::io::RawSocket {
+                self.$inner.as_raw_socket()
+            }
+        }
+        impl ::std::os::windows::io::IntoRawSocket for $t {
+            fn into_raw_socket(self) -> ::std::os::windows::io::RawSocket {
+                self.$inner.into_raw_socket()
+            }
+        }
+        impl ::std::os::windows::io::AsSocket for $t {
+            fn as_socket(&self) -> ::std::os::windows::io::BorrowedSocket {
+                self.$inner.as_socket()
+            }
+        }
+    };
+}
+
+pub(crate) use impl_socket;

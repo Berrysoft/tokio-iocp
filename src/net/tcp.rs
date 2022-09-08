@@ -1,4 +1,8 @@
-use crate::{buf::*, net::Socket, *};
+use crate::{
+    buf::*,
+    net::{Socket, *},
+    *,
+};
 use std::net::{Shutdown, SocketAddr, ToSocketAddrs};
 use windows_sys::Win32::Networking::WinSock::{IPPROTO_TCP, SOCK_STREAM, SOMAXCONN};
 
@@ -82,6 +86,8 @@ impl TcpListener {
     }
 }
 
+impl_socket!(TcpListener, inner);
+
 /// A TCP stream between a local and a remote socket.
 ///
 /// A TCP stream can either be created by connecting to an endpoint, via the
@@ -160,3 +166,5 @@ impl TcpStream {
         self.inner.send_vectored(buffer).await
     }
 }
+
+impl_socket!(TcpStream, inner);

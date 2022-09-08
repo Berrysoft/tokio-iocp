@@ -1,4 +1,8 @@
-use crate::{buf::*, net::Socket, *};
+use crate::{
+    buf::*,
+    net::{Socket, *},
+    *,
+};
 use std::{path::Path, str::FromStr};
 use windows_sys::Win32::Networking::WinSock::{AF_UNIX, IPPROTO_HOPOPTS, SOCK_STREAM};
 
@@ -233,6 +237,8 @@ impl UnixListener {
     }
 }
 
+impl_socket!(UnixListener, inner);
+
 /// A Unix stream between two local sockets on Windows & WSL.
 ///
 /// A Unix stream can either be created by connecting to an endpoint, via the
@@ -308,3 +314,5 @@ impl UnixStream {
         self.inner.send_vectored(buffer).await
     }
 }
+
+impl_socket!(UnixStream, inner);

@@ -1,4 +1,8 @@
-use crate::{buf::*, net::Socket, *};
+use crate::{
+    buf::*,
+    net::{Socket, *},
+    *,
+};
 use std::net::{SocketAddr, ToSocketAddrs};
 use windows_sys::Win32::Networking::WinSock::{IPPROTO_UDP, SOCK_DGRAM};
 
@@ -190,3 +194,5 @@ impl UdpSocket {
         self.inner.send_to_vectored(buffer, addr).await
     }
 }
+
+impl_socket!(UdpSocket, inner);

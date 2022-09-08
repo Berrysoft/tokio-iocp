@@ -1,16 +1,14 @@
 use crate::{
     buf::*,
     io_port::{IocpFuture, IO_PORT},
-    net::unix::UnixSocketAddr,
+    net::{UnixSocketAddr, *},
     op::{accept::*, connect::*, recv::*, recv_from::*, send::*, send_to::*},
     *,
 };
 use once_cell::sync::OnceCell as OnceLock;
 use std::{
     net::{Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
-    os::windows::prelude::{
-        AsRawSocket, AsSocket, BorrowedSocket, FromRawSocket, IntoRawSocket, OwnedSocket, RawSocket,
-    },
+    os::windows::prelude::{AsRawSocket, AsSocket, FromRawSocket, OwnedSocket},
 };
 use windows_sys::Win32::Networking::WinSock::{
     bind, connect, getpeername, getsockname, listen, shutdown, sockaddr_un, socket, WSACleanup,
@@ -210,23 +208,7 @@ impl Socket {
     }
 }
 
-impl AsRawSocket for Socket {
-    fn as_raw_socket(&self) -> RawSocket {
-        self.handle.as_raw_socket()
-    }
-}
-
-impl IntoRawSocket for Socket {
-    fn into_raw_socket(self) -> RawSocket {
-        self.handle.into_raw_socket()
-    }
-}
-
-impl AsSocket for Socket {
-    fn as_socket(&self) -> BorrowedSocket {
-        self.handle.as_socket()
-    }
-}
+impl_socket!(Socket, handle);
 
 pub const MAX_ADDR_SIZE: usize = std::mem::size_of::<SOCKADDR_STORAGE>();
 
