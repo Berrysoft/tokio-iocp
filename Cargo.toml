@@ -15,5 +15,6 @@ windows-sys = { version = "0.36", features = [
 
 [dev-dependencies]
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net"] }
+futures-util = "0.3"
 tempfile = "3.3"
 scopeguard = "1"
