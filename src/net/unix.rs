@@ -113,6 +113,16 @@ impl UnixStream {
         Ok(unix_stream)
     }
 
+    /// Returns the socket address of the remote peer of this TCP connection.
+    pub fn peer_addr(&self) -> IoResult<PathBuf> {
+        self.inner.peer_addr()
+    }
+
+    /// Returns the socket address of the local half of this TCP connection.
+    pub fn local_addr(&self) -> IoResult<PathBuf> {
+        self.inner.local_addr()
+    }
+
     /// Receives a packet of data from the socket into the buffer, returning the original buffer and
     /// quantity of data received.
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
