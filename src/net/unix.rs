@@ -4,6 +4,27 @@ use windows_sys::Win32::Networking::WinSock::{AF_UNIX, IPPROTO_HOPOPTS, SOCK_STR
 
 const UNIX_MAX_PATH: usize = 108;
 
+/// An address associated with a Unix socket.
+/// It is a static sized buffer.
+///
+/// Socket file path should not be longer than 107 bytes.
+///
+/// # Examples
+///
+/// ```
+/// use tokio_iocp::net::UnixSocketAddr;
+/// use std::path::Path;
+///
+/// assert!(UnixSocketAddr::unnamed().is_unnamed());
+/// let addr = "C:\\path.sock".parse::<UnixSocketAddr>().unwrap();
+/// assert_eq!(addr.as_pathname(), Some(Path::new("C:\\path.sock")));
+/// ```
+///
+/// # Notes on Windows
+///
+/// Windows only provides the same behavior as UNIX for `pathname` address.
+/// Connecting to `abstract` address has not been supported, and the length
+/// of non-`pathname` address may be wrong.
 #[derive(Debug, Clone, Copy)]
 pub struct UnixSocketAddr {
     pub(crate) path: [u8; UNIX_MAX_PATH],
@@ -11,13 +32,16 @@ pub struct UnixSocketAddr {
 }
 
 impl UnixSocketAddr {
-    pub fn unnamed() -> IoResult<Self> {
-        Ok(Self {
+    /// Creates an unnamed address.
+    pub fn unnamed() -> Self {
+        Self {
             path: [0u8; UNIX_MAX_PATH],
             len: 0,
-        })
+        }
     }
 
+    /// Creates an anddress from file path.
+    /// The length of file path should not be longer than 107 bytes.
     pub fn from_pathname(path: impl AsRef<Path>) -> IoResult<Self> {
         let path = path.as_ref().as_os_str().to_string_lossy();
         let bytes = path.as_bytes();
@@ -41,6 +65,8 @@ impl UnixSocketAddr {
         })
     }
 
+    /// Creates an anddress with abstract namespace.
+    /// The length of namespace should not be longer than 107 bytes.
     pub fn from_abstract_namespace(namespace: &[u8]) -> IoResult<Self> {
         if namespace.len() >= UNIX_MAX_PATH - 1 {
             return Err(IoError::new(
@@ -68,11 +94,13 @@ impl UnixSocketAddr {
         }
     }
 
+    /// Returns `true` if the address is unnamed.
     #[must_use]
     pub fn is_unnamed(&self) -> bool {
         matches!(self.address(), UnixAddressKind::Unnamed)
     }
 
+    /// Returns the contents of this address if it is a `pathname` address.
     #[must_use]
     pub fn as_pathname(&self) -> Option<&Path> {
         if let UnixAddressKind::Pathname(path) = self.address() {
@@ -82,6 +110,8 @@ impl UnixSocketAddr {
         }
     }
 
+    /// Returns the contents of this address if it is an abstract namespace
+    /// without the leading null byte.
     #[must_use]
     pub fn as_abstract_namespace(&self) -> Option<&[u8]> {
         if let UnixAddressKind::Abstract(name) = self.address() {
@@ -155,7 +185,13 @@ pub struct UnixListener {
 impl UnixListener {
     /// Creates a new [`UnixListener`], which will be bound to the specified file path.
     /// The file path cannot yet exist, and will be cleaned up upon dropping [`UnixListener`]
-    pub fn bind(addr: UnixSocketAddr) -> IoResult<UnixListener> {
+    pub fn bind(path: impl AsRef<Path>) -> IoResult<Self> {
+        Self::bind_addr(UnixSocketAddr::from_pathname(path)?)
+    }
+
+    /// Creates a new [`UnixListener`] with [`UnixSocketAddr`], which will be bound to the specified file path.
+    /// The file path cannot yet exist, and will be cleaned up upon dropping [`UnixListener`]
+    pub fn bind_addr(addr: UnixSocketAddr) -> IoResult<Self> {
         let socket = Socket::bind(addr, SOCK_STREAM, 0)?;
         socket.listen(1024)?;
         Ok(UnixListener { inner: socket })
@@ -191,7 +227,7 @@ impl UnixListener {
     /// }
     ///
     /// let addr = listener.local_addr().expect("Couldn't get local address");
-    /// assert_eq!(addr, Path::new(&sock_file));
+    /// assert_eq!(addr.as_pathname(), Some(Path::new(&sock_file)));
     /// ```
     pub fn local_addr(&self) -> IoResult<UnixSocketAddr> {
         self.inner.local_addr()
@@ -225,12 +261,16 @@ impl UnixStream {
     /// Opens a Unix connection to the specified file path. There must be a
     /// [`UnixListener`] or equivalent listening on the corresponding Unix domain socket
     /// to successfully connect and return a `UnixStream`.
-    pub fn connect(
-        client_addr: UnixSocketAddr,
-        server_addr: UnixSocketAddr,
-    ) -> IoResult<UnixStream> {
-        let socket = Socket::bind(client_addr, SOCK_STREAM, IPPROTO_HOPOPTS)?;
-        socket.connect(server_addr)?;
+    pub fn connect(path: impl AsRef<Path>) -> IoResult<Self> {
+        Self::connect_addr(UnixSocketAddr::from_pathname(path)?)
+    }
+
+    /// Opens a Unix connection to the specified address. There must be a
+    /// [`UnixListener`] or equivalent listening on the corresponding Unix domain socket
+    /// to successfully connect and return a `UnixStream`.
+    pub fn connect_addr(addr: UnixSocketAddr) -> IoResult<Self> {
+        let socket = Socket::new(AF_UNIX as _, SOCK_STREAM, IPPROTO_HOPOPTS)?;
+        socket.connect(addr)?;
         let unix_stream = UnixStream { inner: socket };
         Ok(unix_stream)
     }

@@ -1,10 +1,10 @@
 use scopeguard::defer;
-use tokio_iocp::net::{UnixListener, UnixSocketAddr, UnixStream};
+use tokio_iocp::net::{UnixListener, UnixStream};
 
 fn main() {
     tokio_iocp::start(async {
         let path = format!("{}/unix-example.sock", std::env::var("TEMP").unwrap());
-        let listener = UnixListener::bind(UnixSocketAddr::from_pathname(&path).unwrap()).unwrap();
+        let listener = UnixListener::bind(&path).unwrap();
         defer! {
             std::fs::remove_file(&path).unwrap();
         }
@@ -12,11 +12,7 @@ fn main() {
         let addr = listener.local_addr().unwrap();
         println!("Local addr: {}", addr);
 
-        let tx = UnixStream::connect(
-            UnixSocketAddr::from_abstract_namespace(b"unix-client.sock").unwrap(),
-            addr,
-        )
-        .unwrap();
+        let tx = UnixStream::connect_addr(addr).unwrap();
         let rx = listener.accept().await.unwrap();
 
         println!(
