@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Berrysoft <Strawberry_Str@hotmail.com"]
 readme = "README.md"
 license = "MIT"
+description = "IOCP support for the Tokio asynchronous runtime."
 categories = ["asynchronous", "network-programming"]
 keywords = ["async", "fs", "iocp"]
 repository = "https://github.com/Berrysoft/tokio-iocp"
