@@ -100,6 +100,23 @@ impl UdpSocket {
         super::each_addr(addr, |addr| self.inner.connect(addr))
     }
 
+    /// Returns the socket address of the remote peer this socket was connected to.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use tokio_iocp::net::UdpSocket;
+    /// use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+    ///
+    /// let socket = UdpSocket::bind("127.0.0.1:34254").expect("couldn't bind to address");
+    /// socket.connect("192.168.0.1:41203").expect("couldn't connect to address");
+    /// assert_eq!(socket.peer_addr().unwrap(),
+    ///            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(192, 168, 0, 1), 41203)));
+    /// ```
+    pub fn peer_addr(&self) -> IoResult<SocketAddr> {
+        self.inner.peer_addr()
+    }
+
     /// Returns the local address that this socket is bound to.
     ///
     /// # Example

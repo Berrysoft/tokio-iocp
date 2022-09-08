@@ -18,9 +18,9 @@ use std::{
     ptr::null,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, connect, getsockname, listen, shutdown, WSACleanup, WSAData, WSASocketW, WSAStartup,
-    ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, SD_BOTH, SD_RECEIVE, SD_SEND,
-    WSA_FLAG_OVERLAPPED,
+    bind, connect, getpeername, getsockname, listen, shutdown, WSACleanup, WSAData, WSASocketW,
+    WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, SD_BOTH, SD_RECEIVE,
+    SD_SEND, SOCKADDR, SOCKET, WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -138,11 +138,14 @@ impl Socket {
         }
     }
 
-    pub fn local_addr(&self) -> IoResult<SocketAddr> {
+    fn get_addr(
+        &self,
+        f: unsafe extern "system" fn(SOCKET, *mut SOCKADDR, *mut i32) -> i32,
+    ) -> IoResult<SocketAddr> {
         let mut name = [0u8; MAX_ADDR_SIZE];
         let mut namelen: i32 = MAX_ADDR_SIZE as _;
         let res = unsafe {
-            getsockname(
+            f(
                 self.as_raw_socket() as _,
                 name.as_mut_ptr() as _,
                 &mut namelen,
@@ -153,6 +156,14 @@ impl Socket {
         } else {
             Err(IoError::last_os_error())
         }
+    }
+
+    pub fn peer_addr(&self) -> IoResult<SocketAddr> {
+        self.get_addr(getpeername)
+    }
+
+    pub fn local_addr(&self) -> IoResult<SocketAddr> {
+        self.get_addr(getsockname)
     }
 
     pub async fn accept(&self, ty: u16, protocol: IPPROTO) -> IoResult<(Socket, SocketAddr)> {

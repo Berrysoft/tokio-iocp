@@ -117,6 +117,11 @@ impl TcpStream {
         .await
     }
 
+    /// Returns the socket address of the remote peer of this TCP connection.
+    pub fn peer_addr(&self) -> IoResult<SocketAddr> {
+        self.inner.peer_addr()
+    }
+
     /// Returns the socket address of the local half of this TCP connection.
     pub fn local_addr(&self) -> IoResult<SocketAddr> {
         self.inner.local_addr()
