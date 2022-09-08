@@ -1,5 +1,8 @@
 # tokio-iocp
 
+[![crates.io](https://img.shields.io/crates/v/tokio-iocp)](https://crates.io/crates/tokio-iocp)
+[![docs.rs](https://img.shields.io/badge/docs.rs-tokio--iocp-latest)](https://docs.rs/tokio-iocp)
+
 This crate, inspired by [`tokio-uring`], provides [IOCP] for [Tokio] by exposing a new Runtime that is
 compatible with Tokio but also can drive [IOCP]-backed resources. Any
 library that works with [Tokio] also works with `tokio-iocp`. The crate
