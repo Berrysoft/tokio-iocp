@@ -1,26 +1,25 @@
 use crate::{
     buf::*,
     io_port::{IocpFuture, IO_PORT},
-    op::{
-        accept::*, connect::*, recv::*, recv_from::*, send::*, send_to::*, wsa_exact_addr,
-        wsa_get_addr, MAX_ADDR_SIZE,
-    },
+    op::{accept::*, connect::*, recv::*, recv_from::*, send::*, send_to::*},
     *,
 };
 use once_cell::sync::OnceCell as OnceLock;
 use std::{
-    net::{Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
+    net::{Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
     ops::Deref,
     os::windows::{
         io::{AsSocket, FromRawSocket, OwnedSocket},
         prelude::AsRawSocket,
     },
+    path::PathBuf,
     ptr::null,
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, connect, getpeername, getsockname, listen, shutdown, WSACleanup, WSAData, WSASocketW,
-    WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6, INVALID_SOCKET, IPPROTO, SD_BOTH, SD_RECEIVE,
-    SD_SEND, SOCKADDR, SOCKET, WSA_FLAG_OVERLAPPED,
+    bind, connect, getpeername, getsockname, listen, shutdown, sockaddr_un, WSACleanup, WSAData,
+    WSASocketW, WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNIX, INVALID_SOCKET, IPPROTO,
+    SD_BOTH, SD_RECEIVE, SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE, SOCKET,
+    WSA_FLAG_OVERLAPPED,
 };
 
 struct WSAInit;
@@ -51,27 +50,12 @@ pub struct Socket {
     handle: OwnedSocket,
 }
 
-const fn get_domain(addr: SocketAddr) -> ADDRESS_FAMILY {
-    match addr {
-        SocketAddr::V4(_) => AF_INET,
-        SocketAddr::V6(_) => AF_INET6,
-    }
-}
-
 impl Socket {
-    pub fn new(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
+    pub fn new(addr: ADDRESS_FAMILY, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
         WSA_INIT.get_or_init(WSAInit::init);
 
-        let handle = unsafe {
-            WSASocketW(
-                get_domain(addr) as _,
-                ty as _,
-                protocol,
-                null(),
-                0,
-                WSA_FLAG_OVERLAPPED,
-            )
-        };
+        let handle =
+            unsafe { WSASocketW(addr as _, ty as _, protocol, null(), 0, WSA_FLAG_OVERLAPPED) };
         if handle != INVALID_SOCKET {
             let socket = Self {
                 handle: unsafe { OwnedSocket::from_raw_socket(handle as _) },
@@ -87,13 +71,10 @@ impl Socket {
         IO_PORT.with(|port| port.attach(self.as_raw_socket() as _))
     }
 
-    pub fn bind(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
-        let socket = Self::new(addr, ty as _, protocol)?;
-        let res = unsafe {
-            wsa_exact_addr(addr, |addr, len| {
-                bind(socket.as_raw_socket() as _, addr, len)
-            })
-        };
+    pub fn bind(addr: impl SockAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
+        let socket = Self::new(addr.domain() as _, ty as _, protocol)?;
+        let res =
+            unsafe { addr.with_native(|addr, len| bind(socket.as_raw_socket() as _, addr, len)) };
         if res == 0 {
             Ok(socket)
         } else {
@@ -102,19 +83,16 @@ impl Socket {
     }
 
     pub fn bind_any_like(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
-        let new_addr = match addr {
+        let new_addr: SocketAddr = match addr {
             SocketAddr::V4(addr) => SocketAddrV4::new(*addr.ip(), 0).into(),
             SocketAddr::V6(addr) => SocketAddrV6::new(*addr.ip(), 0, 0, 0).into(),
         };
         Self::bind(new_addr, ty, protocol)
     }
 
-    pub fn connect(&self, addr: SocketAddr) -> IoResult<()> {
-        let res = unsafe {
-            wsa_exact_addr(addr, |addr, len| {
-                connect(self.as_raw_socket() as _, addr, len)
-            })
-        };
+    pub fn connect(&self, addr: impl SockAddr) -> IoResult<()> {
+        let res =
+            unsafe { addr.with_native(|addr, len| connect(self.as_raw_socket() as _, addr, len)) };
         if res == 0 {
             Ok(())
         } else {
@@ -122,8 +100,7 @@ impl Socket {
         }
     }
 
-    pub async fn connect_ex(&self, addr: SocketAddr) -> IoResult<()> {
-        println!("Connect {}", addr);
+    pub async fn connect_ex(&self, addr: impl SockAddr) -> IoResult<()> {
         IocpFuture::new(self.as_socket(), Connect::new(addr))
             .await
             .0
@@ -138,10 +115,10 @@ impl Socket {
         }
     }
 
-    fn get_addr(
+    fn get_addr<A: SockAddr>(
         &self,
         f: unsafe extern "system" fn(SOCKET, *mut SOCKADDR, *mut i32) -> i32,
-    ) -> IoResult<SocketAddr> {
+    ) -> IoResult<A> {
         let mut name = [0u8; MAX_ADDR_SIZE];
         let mut namelen: i32 = MAX_ADDR_SIZE as _;
         let res = unsafe {
@@ -152,23 +129,23 @@ impl Socket {
             )
         };
         if res == 0 {
-            Ok(unsafe { wsa_get_addr(name.as_ptr() as _, namelen as _) })
+            Ok(unsafe { A::try_from_native(name.as_ptr() as _, namelen as _).unwrap() })
         } else {
             Err(IoError::last_os_error())
         }
     }
 
-    pub fn peer_addr(&self) -> IoResult<SocketAddr> {
+    pub fn peer_addr<A: SockAddr>(&self) -> IoResult<A> {
         self.get_addr(getpeername)
     }
 
-    pub fn local_addr(&self) -> IoResult<SocketAddr> {
+    pub fn local_addr<A: SockAddr>(&self) -> IoResult<A> {
         self.get_addr(getsockname)
     }
 
-    pub async fn accept(&self, ty: u16, protocol: IPPROTO) -> IoResult<(Socket, SocketAddr)> {
-        let local_addr = self.local_addr()?;
-        let accept_socket = Socket::new(local_addr, ty, protocol)?;
+    pub async fn accept<A: SockAddr>(&self, ty: u16, protocol: IPPROTO) -> IoResult<(Socket, A)> {
+        let local_addr: A = self.local_addr()?;
+        let accept_socket = Socket::new(local_addr.domain() as _, ty, protocol)?;
         let (res, accept_socket) =
             IocpFuture::new(self.as_socket(), Accept::new(accept_socket.handle)).await;
         let addr = res?;
@@ -211,14 +188,18 @@ impl Socket {
     }
 
     pub async fn recv_from<T: IoBufMut>(&self, buffer: T) -> BufResult<(usize, SocketAddr), T> {
-        IocpFuture::new(self.as_socket(), RecvFromOne::new(buffer)).await
+        IocpFuture::new(self.as_socket(), RecvFromOne::<_, SocketAddr>::new(buffer)).await
     }
 
     pub async fn recv_from_vectored<T: IoBufMut>(
         &self,
         buffer: Vec<T>,
     ) -> BufResult<(usize, SocketAddr), Vec<T>> {
-        IocpFuture::new(self.as_socket(), RecvFromVectored::new(buffer)).await
+        IocpFuture::new(
+            self.as_socket(),
+            RecvFromVectored::<_, SocketAddr>::new(buffer),
+        )
+        .await
     }
 
     pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> BufResult<usize, T> {
@@ -239,5 +220,106 @@ impl Deref for Socket {
 
     fn deref(&self) -> &Self::Target {
         &self.handle
+    }
+}
+
+pub const MAX_ADDR_SIZE: usize = std::mem::size_of::<SOCKADDR_STORAGE>();
+
+pub trait SockAddr: Sized + Unpin {
+    fn domain(&self) -> u16;
+
+    unsafe fn try_from_native(addr: *const SOCKADDR, len: i32) -> Option<Self>;
+
+    unsafe fn with_native<T>(&self, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T;
+}
+
+impl SockAddr for SocketAddr {
+    fn domain(&self) -> u16 {
+        match self {
+            Self::V4(_) => AF_INET as _,
+            Self::V6(_) => AF_INET6 as _,
+        }
+    }
+
+    unsafe fn try_from_native(addr: *const SOCKADDR, _len: i32) -> Option<Self> {
+        let addr_ref = addr.as_ref().unwrap();
+        match addr_ref.sa_family as u32 {
+            AF_INET => {
+                let addr = (addr as *const SOCKADDR_IN).as_ref().unwrap();
+                Some(SocketAddr::V4(SocketAddrV4::new(
+                    Ipv4Addr::from(addr.sin_addr.S_un.S_addr.to_ne_bytes()),
+                    addr.sin_port,
+                )))
+            }
+            AF_INET6 => {
+                let addr = (addr as *const SOCKADDR_IN6).as_ref().unwrap();
+                Some(SocketAddr::V6(SocketAddrV6::new(
+                    Ipv6Addr::from(addr.sin6_addr.u.Byte),
+                    addr.sin6_port,
+                    addr.sin6_flowinfo,
+                    addr.Anonymous.sin6_scope_id,
+                )))
+            }
+            _ => None,
+        }
+    }
+
+    unsafe fn with_native<T>(&self, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T {
+        match self {
+            SocketAddr::V4(addr) => {
+                let native_addr = SOCKADDR_IN {
+                    sin_family: AF_INET as _,
+                    sin_port: addr.port(),
+                    sin_addr: std::mem::transmute(u32::from_ne_bytes(addr.ip().octets())),
+                    sin_zero: std::mem::zeroed(),
+                };
+                f(
+                    std::ptr::addr_of!(native_addr) as _,
+                    std::mem::size_of_val(&native_addr) as _,
+                )
+            }
+            SocketAddr::V6(addr) => {
+                let native_addr = SOCKADDR_IN6 {
+                    sin6_family: AF_INET6 as _,
+                    sin6_port: addr.port(),
+                    sin6_flowinfo: 0,
+                    sin6_addr: std::mem::transmute(addr.ip().octets()),
+                    Anonymous: std::mem::zeroed(),
+                };
+                f(
+                    std::ptr::addr_of!(native_addr) as _,
+                    std::mem::size_of_val(&native_addr) as _,
+                )
+            }
+        }
+    }
+}
+
+impl SockAddr for PathBuf {
+    fn domain(&self) -> u16 {
+        AF_UNIX
+    }
+
+    unsafe fn try_from_native(addr: *const SOCKADDR, len: i32) -> Option<Self> {
+        let addr_ref = addr.as_ref().unwrap();
+        if addr_ref.sa_family == AF_UNIX && len > 3 {
+            let addr = (addr as *const sockaddr_un).as_ref().unwrap();
+            Some(PathBuf::from(std::str::from_utf8_unchecked(
+                &addr.sun_path[..(len as usize - 3)],
+            )))
+        } else {
+            None
+        }
+    }
+
+    unsafe fn with_native<T>(&self, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T {
+        let mut addr = sockaddr_un {
+            sun_family: AF_UNIX,
+            sun_path: unsafe { std::mem::zeroed() },
+        };
+        let p = self.as_os_str().to_string_lossy();
+        let len = p.len().min(addr.sun_path.len() - 1);
+        addr.sun_path[..len].copy_from_slice(p.as_bytes());
+        f(&addr as *const _ as _, (len + 3) as _)
     }
 }

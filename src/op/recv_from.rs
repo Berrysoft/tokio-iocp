@@ -1,24 +1,27 @@
-use crate::op::*;
+use crate::{net::*, op::*};
+use std::marker::PhantomData;
 use windows_sys::Win32::Networking::WinSock::WSARecvFrom;
 
-pub struct RecvFrom<T: WithWsaBufMut> {
+pub struct RecvFrom<T: WithWsaBufMut, A: SockAddr> {
     buffer: T,
     addr_buffer: [u8; MAX_ADDR_SIZE],
     addr_size: i32,
+    _marker: PhantomData<A>,
 }
 
-impl<T: WithWsaBufMut> RecvFrom<T> {
+impl<T: WithWsaBufMut, A: SockAddr> RecvFrom<T, A> {
     pub fn new(buffer: T::Buffer) -> Self {
         Self {
             buffer: T::new(buffer),
             addr_buffer: [0; MAX_ADDR_SIZE],
             addr_size: MAX_ADDR_SIZE as _,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<T: WithWsaBufMut> IocpOperation for RecvFrom<T> {
-    type Output = (usize, SocketAddr);
+impl<T: WithWsaBufMut, A: SockAddr> IocpOperation for RecvFrom<T, A> {
+    type Output = (usize, A);
     type Buffer = T::Buffer;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -45,7 +48,9 @@ impl<T: WithWsaBufMut> IocpOperation for RecvFrom<T> {
     }
 
     fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
-        let addr = unsafe { wsa_get_addr(self.addr_buffer.as_ptr() as _, self.addr_size as _) };
+        let addr =
+            unsafe { A::try_from_native(self.addr_buffer.as_ptr() as _, self.addr_size as _) }
+                .unwrap();
         (Ok((res, addr)), self.buffer.take_buf())
     }
 
@@ -54,5 +59,5 @@ impl<T: WithWsaBufMut> IocpOperation for RecvFrom<T> {
     }
 }
 
-pub type RecvFromOne<T> = RecvFrom<BufWrapper<T>>;
-pub type RecvFromVectored<T> = RecvFrom<VectoredBufWrapper<T>>;
+pub type RecvFromOne<T, A> = RecvFrom<BufWrapper<T>, A>;
+pub type RecvFromVectored<T, A> = RecvFrom<VectoredBufWrapper<T>, A>;

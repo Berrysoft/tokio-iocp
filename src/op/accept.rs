@@ -1,6 +1,7 @@
-use crate::op::*;
+use crate::{net::*, op::*};
 use once_cell::sync::OnceCell as OnceLock;
 use std::{
+    marker::PhantomData,
     os::windows::prelude::{AsRawSocket, OwnedSocket},
     ptr::null_mut,
 };
@@ -9,22 +10,24 @@ use windows_sys::Win32::Networking::WinSock::{LPFN_ACCEPTEX, LPFN_GETACCEPTEXSOC
 static ACCEPT_EX: OnceLock<LPFN_ACCEPTEX> = OnceLock::new();
 static GET_ADDRS: OnceLock<LPFN_GETACCEPTEXSOCKADDRS> = OnceLock::new();
 
-pub struct Accept {
+pub struct Accept<A: SockAddr> {
     accept_handle: Option<OwnedSocket>,
     addr_buffer: [u8; MAX_ADDR_SIZE * 2],
+    _marker: PhantomData<A>,
 }
 
-impl Accept {
+impl<A: SockAddr> Accept<A> {
     pub fn new(handle: OwnedSocket) -> Self {
         Self {
             accept_handle: Some(handle),
             addr_buffer: [0; MAX_ADDR_SIZE * 2],
+            _marker: PhantomData,
         }
     }
 }
 
-impl IocpOperation for Accept {
-    type Output = SocketAddr;
+impl<A: SockAddr> IocpOperation for Accept<A> {
+    type Output = A;
     type Buffer = OwnedSocket;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
@@ -68,7 +71,7 @@ impl IocpOperation for Accept {
                 &mut remote_addr,
                 &mut remote_addr_len,
             );
-            wsa_get_addr(remote_addr, remote_addr_len as _)
+            A::try_from_native(remote_addr, remote_addr_len).unwrap()
         };
         (Ok(remote_addr), self.accept_handle.take().unwrap())
     }
