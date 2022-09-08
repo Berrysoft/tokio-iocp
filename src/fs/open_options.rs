@@ -86,8 +86,7 @@ impl OpenOptions {
 
     /// Sets the option to create a new file, or open it if it already exists.
     ///
-    /// In order for the file to be created, [`OpenOptions::write`] or
-    /// [`OpenOptions::append`] access must be used.
+    /// In order for the file to be created, [`OpenOptions::write`] access must be used.
     pub fn create(&mut self, create: bool) -> &mut Self {
         self.0.create(create);
         self
