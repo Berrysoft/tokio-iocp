@@ -1,6 +1,7 @@
 use crate::{
     buf::*,
     io_port::{IocpFuture, IO_PORT},
+    net::unix::UnixSocketAddr,
     op::{accept::*, connect::*, recv::*, recv_from::*, send::*, send_to::*},
     *,
 };
@@ -12,7 +13,6 @@ use std::{
         io::{AsSocket, FromRawSocket, OwnedSocket},
         prelude::AsRawSocket,
     },
-    path::PathBuf,
     ptr::null,
 };
 use windows_sys::Win32::Networking::WinSock::{
@@ -295,31 +295,30 @@ impl SockAddr for SocketAddr {
     }
 }
 
-impl SockAddr for PathBuf {
+impl SockAddr for UnixSocketAddr {
     fn domain(&self) -> u16 {
         AF_UNIX
     }
 
     unsafe fn try_from_native(addr: *const SOCKADDR, len: i32) -> Option<Self> {
         let addr_ref = addr.as_ref().unwrap();
-        if addr_ref.sa_family == AF_UNIX && len > 3 {
+        if addr_ref.sa_family == AF_UNIX {
             let addr = (addr as *const sockaddr_un).as_ref().unwrap();
-            Some(PathBuf::from(std::str::from_utf8_unchecked(
-                &addr.sun_path[..(len as usize - 3)],
-            )))
+            let len = (len - 2) as usize;
+            Some(UnixSocketAddr {
+                path: addr.sun_path,
+                len,
+            })
         } else {
             None
         }
     }
 
     unsafe fn with_native<T>(&self, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T {
-        let mut addr = sockaddr_un {
+        let addr = sockaddr_un {
             sun_family: AF_UNIX,
-            sun_path: unsafe { std::mem::zeroed() },
+            sun_path: self.path,
         };
-        let p = self.as_os_str().to_string_lossy();
-        let len = p.len().min(addr.sun_path.len() - 1);
-        addr.sun_path[..len].copy_from_slice(p.as_bytes());
-        f(&addr as *const _ as _, (len + 3) as _)
+        f(&addr as *const _ as _, (self.len + 2) as _)
     }
 }
