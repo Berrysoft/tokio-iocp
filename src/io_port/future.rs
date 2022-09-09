@@ -8,7 +8,7 @@ use std::{
 };
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
-    System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED},
+    System::IO::{CancelIoEx, GetOverlappedResult},
 };
 
 pub enum BorrowedRes<'a> {
@@ -67,10 +67,8 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
         let overlapped = match this.overlapped.get_or_try_init(|| {
             let overlapped = Box::new(OverlappedWaker::new(cx.waker().clone()));
             unsafe {
-                this.op.operate(
-                    this.handle.as_raw_handle() as _,
-                    overlapped.as_ref() as *const OverlappedWaker as *mut OVERLAPPED,
-                )?;
+                this.op
+                    .operate(this.handle.as_raw_handle() as _, overlapped.as_ptr() as _)?;
             }
             Ok(overlapped)
         }) {
@@ -79,7 +77,7 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
         };
         // We need to set the recent waker.
         overlapped.set_waker(cx.waker().clone());
-        let overlapped_ptr = overlapped.as_ref() as *const OverlappedWaker as *mut OVERLAPPED;
+        let overlapped_ptr = overlapped.as_ptr();
         let mut transferred = 0;
         let res = unsafe {
             GetOverlappedResult(
@@ -112,12 +110,7 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
 impl<Op: IocpOperation> Drop for IocpFuture<'_, Op> {
     fn drop(&mut self) {
         if let Some(overlapped) = self.overlapped.get() {
-            unsafe {
-                CancelIoEx(
-                    self.handle.as_raw_handle() as _,
-                    overlapped.as_ref() as *const OverlappedWaker as *const OVERLAPPED,
-                )
-            };
+            unsafe { CancelIoEx(self.handle.as_raw_handle() as _, overlapped.as_ptr()) };
         }
     }
 }

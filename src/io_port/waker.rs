@@ -33,4 +33,8 @@ impl OverlappedWaker {
     pub fn take_err(&self) -> Option<IoError> {
         self.err.take()
     }
+
+    pub fn as_ptr(&self) -> *const OVERLAPPED {
+        &self.overlapped
+    }
 }

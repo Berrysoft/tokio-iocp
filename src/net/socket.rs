@@ -232,14 +232,14 @@ impl SockAddr for SocketAddr {
         let addr_ref = addr.as_ref().unwrap();
         match addr_ref.sa_family as u32 {
             AF_INET => {
-                let addr = (addr as *const SOCKADDR_IN).as_ref().unwrap();
+                let addr = addr.cast::<SOCKADDR_IN>().as_ref().unwrap();
                 Some(SocketAddr::V4(SocketAddrV4::new(
                     Ipv4Addr::from(addr.sin_addr.S_un.S_addr.to_ne_bytes()),
                     addr.sin_port,
                 )))
             }
             AF_INET6 => {
-                let addr = (addr as *const SOCKADDR_IN6).as_ref().unwrap();
+                let addr = addr.cast::<SOCKADDR_IN6>().as_ref().unwrap();
                 Some(SocketAddr::V6(SocketAddrV6::new(
                     Ipv6Addr::from(addr.sin6_addr.u.Byte),
                     addr.sin6_port,
@@ -290,7 +290,7 @@ impl SockAddr for UnixSocketAddr {
     unsafe fn try_from_native(addr: *const SOCKADDR, len: i32) -> Option<Self> {
         let addr_ref = addr.as_ref().unwrap();
         if addr_ref.sa_family == AF_UNIX {
-            let addr = (addr as *const sockaddr_un).as_ref().unwrap();
+            let addr = addr.cast::<sockaddr_un>().as_ref().unwrap();
             let len = (len - 2) as usize;
             Some(UnixSocketAddr {
                 path: addr.sun_path,
@@ -306,6 +306,9 @@ impl SockAddr for UnixSocketAddr {
             sun_family: AF_UNIX,
             sun_path: self.path,
         };
-        f(&addr as *const _ as _, (self.len + 2) as _)
+        f(
+            std::ptr::addr_of!(addr).cast::<SOCKADDR>(),
+            (self.len + 2) as _,
+        )
     }
 }

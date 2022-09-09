@@ -55,9 +55,9 @@ pub unsafe fn get_wsa_fn<F>(handle: usize, fguid: GUID) -> IoResult<Option<F>> {
     let res = WSAIoctl(
         handle,
         SIO_GET_EXTENSION_FUNCTION_POINTER,
-        &fguid as *const _ as _,
+        std::ptr::addr_of!(fguid).cast(),
         std::mem::size_of_val(&fguid) as _,
-        &mut fptr as *const _ as _,
+        std::ptr::addr_of_mut!(fptr).cast(),
         std::mem::size_of::<usize>() as _,
         &mut returned,
         null_mut(),
