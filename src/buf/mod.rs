@@ -7,6 +7,9 @@
 mod io_buf;
 pub use io_buf::*;
 
+mod slice;
+pub use slice::*;
+
 mod with_buf;
 pub(crate) use with_buf::*;
 

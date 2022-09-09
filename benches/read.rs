@@ -12,18 +12,12 @@ fn std(b: &mut Bencher) {
         .unwrap();
     let mut file = std::fs::File::open("Cargo.toml").unwrap();
 
-    fn read(file: &mut std::fs::File) -> Vec<u8> {
-        use std::io::Read;
-        let mut buffer = Vec::with_capacity(1024);
-        file.read_to_end(&mut buffer).unwrap();
-        buffer
-    }
-
     b.iter(|| {
         runtime.block_on(async {
-            for _i in 0..100 {
-                test::black_box(read(&mut file));
-            }
+            use std::io::Read;
+            let mut buffer = Vec::with_capacity(1024);
+            file.read_to_end(&mut buffer).unwrap();
+            buffer
         })
     });
 }
@@ -36,39 +30,36 @@ fn tokio(b: &mut Bencher) {
         .unwrap();
     let mut file = runtime.block_on(async { tokio::fs::File::open("Cargo.toml").await.unwrap() });
 
-    async fn read(file: &mut tokio::fs::File) -> Vec<u8> {
-        use tokio::io::AsyncReadExt;
-        let mut buffer = Vec::with_capacity(1024);
-        file.read_to_end(&mut buffer).await.unwrap();
-        buffer
-    }
-
     b.iter(|| {
         runtime.block_on(async {
-            for _i in 0..100 {
-                test::black_box(read(&mut file).await);
-            }
+            use tokio::io::AsyncReadExt;
+            let mut buffer = Vec::with_capacity(1024);
+            file.read_to_end(&mut buffer).await.unwrap();
+            buffer
         })
     })
 }
 
 #[bench]
 fn iocp(b: &mut Bencher) {
+    let size = std::fs::metadata("Cargo.toml").unwrap().len() as usize;
     let file = tokio_iocp::fs::File::open("Cargo.toml").unwrap();
     let runtime = tokio_iocp::runtime::Runtime::new().unwrap();
 
-    async fn read(file: &tokio_iocp::fs::File) -> Vec<u8> {
-        let buffer = Vec::with_capacity(1024);
-        let (n, buffer) = file.read_at(buffer, 0).await;
-        n.unwrap();
-        buffer
-    }
-
     b.iter(|| {
         runtime.block_on(async {
-            use futures_util::future::join_all;
-            let buffers = join_all((0..100).map(|_| read(&file))).await;
-            test::black_box(buffers)
+            use tokio_iocp::buf::IoBuf;
+            let mut buffer = Vec::with_capacity(1024);
+            while buffer.len() < size {
+                let old_len = buffer.len();
+                let (n, sbuf) = file.read_at(buffer.slice(old_len..), old_len).await;
+                buffer = sbuf.into_inner();
+                let n = n.unwrap();
+                if n == 0 {
+                    break;
+                }
+            }
+            buffer
         })
     })
 }

@@ -1,3 +1,5 @@
+use crate::buf::*;
+
 /// An IOCP compatible buffer.
 ///
 /// The `IoBuf` trait is implemented by buffer types that can be passed to
@@ -33,6 +35,32 @@ pub unsafe trait IoBuf: Unpin + 'static {
     ///
     /// For [`Vec`], this is identical to `capacity()`.
     fn buf_capacity(&self) -> usize;
+
+    fn slice(self, range: impl std::ops::RangeBounds<usize>) -> Slice<Self>
+    where
+        Self: Sized,
+    {
+        use std::ops::Bound;
+
+        let begin = match range.start_bound() {
+            Bound::Included(&n) => n,
+            Bound::Excluded(&n) => n + 1,
+            Bound::Unbounded => 0,
+        };
+
+        assert!(begin < self.buf_capacity());
+
+        let end = match range.end_bound() {
+            Bound::Included(&n) => n.checked_add(1).expect("out of range"),
+            Bound::Excluded(&n) => n,
+            Bound::Unbounded => self.buf_capacity(),
+        };
+
+        assert!(end <= self.buf_capacity());
+        assert!(begin <= self.buf_len());
+
+        Slice::new(self, begin, end)
+    }
 }
 
 unsafe impl IoBuf for Vec<u8> {
@@ -64,6 +92,20 @@ unsafe impl IoBuf for &'static mut [u8] {
 }
 
 unsafe impl IoBuf for &'static [u8] {
+    fn as_buf_ptr(&self) -> *const u8 {
+        self.as_ptr()
+    }
+
+    fn buf_len(&self) -> usize {
+        self.len()
+    }
+
+    fn buf_capacity(&self) -> usize {
+        self.len()
+    }
+}
+
+unsafe impl<const N: usize> IoBuf for [u8; N] {
     fn as_buf_ptr(&self) -> *const u8 {
         self.as_ptr()
     }
@@ -159,6 +201,16 @@ unsafe impl IoBufMut for Vec<u8> {
 }
 
 unsafe impl IoBufMut for &'static mut [u8] {
+    fn as_buf_mut_ptr(&mut self) -> *mut u8 {
+        self.as_mut_ptr()
+    }
+
+    fn set_buf_len(&mut self, len: usize) {
+        assert!(len <= self.buf_capacity())
+    }
+}
+
+unsafe impl<const N: usize> IoBufMut for [u8; N] {
     fn as_buf_mut_ptr(&mut self) -> *mut u8 {
         self.as_mut_ptr()
     }
