@@ -3,7 +3,7 @@ use crate::{
     net::{Socket, *},
     *,
 };
-use std::{path::Path, str::FromStr};
+use std::{net::Shutdown, path::Path, str::FromStr};
 use windows_sys::Win32::Networking::WinSock::{AF_UNIX, IPPROTO_HOPOPTS, SOCK_STREAM};
 
 const UNIX_MAX_PATH: usize = 108;
@@ -171,7 +171,7 @@ enum UnixAddressKind<'a> {
 ///     }
 ///
 ///     let tx = UnixStream::connect(&sock_file).unwrap();
-///     let rx = listener.accept().await.unwrap();
+///     let (rx, _) = listener.accept().await.unwrap();
 ///
 ///     tx.send("test").await.0.unwrap();
 ///
@@ -288,6 +288,15 @@ impl UnixStream {
     /// Returns the socket path of the local half of this connection.
     pub fn local_addr(&self) -> IoResult<UnixSocketAddr> {
         self.inner.local_addr()
+    }
+
+    /// Shuts down the read, write, or both halves of this connection.
+    ///
+    /// This function will cause all pending and future I/O on the specified
+    /// portions to return immediately with an appropriate value (see the
+    /// documentation of [`Shutdown`]).
+    pub fn shutdown(&self, how: Shutdown) -> IoResult<()> {
+        self.inner.shutdown(how)
     }
 
     /// Receives a packet of data from the socket into the buffer, returning the original buffer and
