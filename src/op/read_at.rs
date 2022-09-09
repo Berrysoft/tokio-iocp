@@ -34,11 +34,7 @@ impl<T: IoBufMut> IocpOperation for ReadAt<T> {
         self.buffer.set_len(len)
     }
 
-    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer> {
-        (Ok(res), self.buffer.take_buf())
-    }
-
-    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
-        (Err(err), self.buffer.take_buf())
+    fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer> {
+        (res, self.buffer.take_buf())
     }
 }

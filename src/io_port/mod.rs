@@ -67,7 +67,9 @@ impl IoPort {
         } else {
             None
         };
-        if let Some(overlapped) = waker::OverlappedWaker::from_raw(overlapped_ptr as _) {
+        if let Some(overlapped) =
+            unsafe { (overlapped_ptr as *const waker::OverlappedWaker).as_ref() }
+        {
             if let Some(err) = err {
                 overlapped.set_err(err);
             }

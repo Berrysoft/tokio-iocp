@@ -1,4 +1,5 @@
-use crate::{io_port::waker::OverlappedWakerWrapper, op::IocpOperation, *};
+use crate::{io_port::waker::OverlappedWaker, op::IocpOperation, *};
+use once_cell::unsync::OnceCell;
 use std::{
     future::Future,
     os::windows::prelude::{AsRawHandle, AsRawSocket, BorrowedHandle, BorrowedSocket},
@@ -7,7 +8,7 @@ use std::{
 };
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
-    System::IO::GetOverlappedResult,
+    System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED},
 };
 
 pub enum BorrowedRes<'a> {
@@ -39,7 +40,7 @@ impl<'a> From<BorrowedSocket<'a>> for BorrowedRes<'a> {
 pub struct IocpFuture<'a, Op: IocpOperation> {
     handle: BorrowedRes<'a>,
     op: Op,
-    overlapped: OverlappedWakerWrapper,
+    overlapped: OnceCell<Box<OverlappedWaker>>,
 }
 
 impl<'a, Op: IocpOperation> IocpFuture<'a, Op> {
@@ -47,8 +48,13 @@ impl<'a, Op: IocpOperation> IocpFuture<'a, Op> {
         Self {
             handle: handle.into(),
             op,
-            overlapped: OverlappedWakerWrapper::new(),
+            overlapped: OnceCell::new(),
         }
+    }
+
+    fn result(&mut self, res: IoResult<usize>) -> BufResult<Op::Output, Op::Buffer> {
+        _ = self.overlapped.take();
+        self.op.result(res)
     }
 }
 
@@ -57,14 +63,23 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
-        let (overlapped, overlapped_ptr) = match this
-            .overlapped
-            .get_and_try_op(cx.waker().clone(), |ptr| unsafe {
-                this.op.operate(this.handle.as_raw_handle() as _, ptr)
-            }) {
-            Ok(ptr) => ptr,
-            Err(e) => return Poll::Ready(this.op.error(e)),
+
+        let overlapped = match this.overlapped.get_or_try_init(|| {
+            let overlapped = Box::new(OverlappedWaker::new(cx.waker().clone()));
+            unsafe {
+                this.op.operate(
+                    this.handle.as_raw_handle() as _,
+                    overlapped.as_ref() as *const OverlappedWaker as *mut OVERLAPPED,
+                )?;
+            }
+            Ok(overlapped)
+        }) {
+            Ok(o) => o,
+            Err(e) => return Poll::Ready(this.result(Err(e))),
         };
+        // We need to set the recent waker.
+        overlapped.set_waker(cx.waker().clone());
+        let overlapped_ptr = overlapped.as_ref() as *const OverlappedWaker as *mut OVERLAPPED;
         let mut transferred = 0;
         let res = unsafe {
             GetOverlappedResult(
@@ -78,18 +93,31 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
             let error = unsafe { GetLastError() };
             match error {
                 ERROR_IO_INCOMPLETE => Poll::Pending,
-                ERROR_HANDLE_EOF => Poll::Ready(this.op.result(0)),
-                _ => Poll::Ready(this.op.error(IoError::from_raw_os_error(error as _))),
+                ERROR_HANDLE_EOF => Poll::Ready(this.result(Ok(0))),
+                _ => Poll::Ready(this.result(Err(IoError::from_raw_os_error(error as _)))),
             }
         } else {
             match overlapped.take_err() {
                 None => {
                     let transferred = transferred as usize;
                     this.op.set_buf_len(transferred);
-                    Poll::Ready(this.op.result(transferred))
+                    Poll::Ready(this.result(Ok(transferred)))
                 }
-                Some(err) => Poll::Ready(this.op.error(err)),
+                Some(err) => Poll::Ready(this.result(Err(err))),
             }
+        }
+    }
+}
+
+impl<Op: IocpOperation> Drop for IocpFuture<'_, Op> {
+    fn drop(&mut self) {
+        if let Some(overlapped) = self.overlapped.get() {
+            unsafe {
+                CancelIoEx(
+                    self.handle.as_raw_handle() as _,
+                    overlapped.as_ref() as *const OverlappedWaker as *const OVERLAPPED,
+                )
+            };
         }
     }
 }

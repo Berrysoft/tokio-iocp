@@ -25,8 +25,7 @@ pub trait IocpOperation: Unpin {
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()>;
     fn set_buf_len(&mut self, len: usize);
 
-    fn result(&mut self, res: usize) -> BufResult<Self::Output, Self::Buffer>;
-    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer>;
+    fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer>;
 }
 
 pub unsafe fn win32_result(res: i32) -> IoResult<()> {

@@ -55,8 +55,8 @@ impl<A: SockAddr> IocpOperation for Accept<A> {
 
     fn set_buf_len(&mut self, _len: usize) {}
 
-    fn result(&mut self, _res: usize) -> BufResult<Self::Output, Self::Buffer> {
-        let remote_addr = unsafe {
+    fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer> {
+        let out = res.map(|_| unsafe {
             let mut local_addr: *mut SOCKADDR = null_mut();
             let mut local_addr_len = 0;
             let mut remote_addr: *mut SOCKADDR = null_mut();
@@ -72,11 +72,7 @@ impl<A: SockAddr> IocpOperation for Accept<A> {
                 &mut remote_addr_len,
             );
             A::try_from_native(remote_addr, remote_addr_len).unwrap()
-        };
-        (Ok(remote_addr), self.accept_handle.take().unwrap())
-    }
-
-    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
-        (Err(err), self.accept_handle.take().unwrap())
+        });
+        (out, self.accept_handle.take().unwrap())
     }
 }

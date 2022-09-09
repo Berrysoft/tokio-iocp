@@ -118,20 +118,6 @@ unsafe impl IoBuf for &'static [u8] {
     }
 }
 
-unsafe impl<const N: usize> IoBuf for [u8; N] {
-    fn as_buf_ptr(&self) -> *const u8 {
-        self.as_ptr()
-    }
-
-    fn buf_len(&self) -> usize {
-        self.len()
-    }
-
-    fn buf_capacity(&self) -> usize {
-        self.len()
-    }
-}
-
 unsafe impl IoBuf for String {
     fn as_buf_ptr(&self) -> *const u8 {
         self.as_ptr()
@@ -214,16 +200,6 @@ unsafe impl IoBufMut for Vec<u8> {
 }
 
 unsafe impl IoBufMut for &'static mut [u8] {
-    fn as_buf_mut_ptr(&mut self) -> *mut u8 {
-        self.as_mut_ptr()
-    }
-
-    fn set_buf_len(&mut self, len: usize) {
-        assert!(len <= self.buf_capacity())
-    }
-}
-
-unsafe impl<const N: usize> IoBufMut for [u8; N] {
     fn as_buf_mut_ptr(&mut self) -> *mut u8 {
         self.as_mut_ptr()
     }

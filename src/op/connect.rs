@@ -33,11 +33,7 @@ impl<A: SockAddr> IocpOperation for Connect<A> {
 
     fn set_buf_len(&mut self, _len: usize) {}
 
-    fn result(&mut self, _res: usize) -> BufResult<Self::Output, Self::Buffer> {
-        (Ok(()), ())
-    }
-
-    fn error(&mut self, err: IoError) -> BufResult<Self::Output, Self::Buffer> {
-        (Err(err), ())
+    fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer> {
+        (res.map(|_| ()), ())
     }
 }
