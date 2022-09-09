@@ -36,6 +36,19 @@ pub unsafe trait IoBuf: Unpin + 'static {
     /// For [`Vec`], this is identical to `capacity()`.
     fn buf_capacity(&self) -> usize;
 
+    /// Returns a view of the buffer with the specified range.
+    ///
+    /// This method is similar to Rust's slicing (`&buf[..]`), but takes
+    /// ownership of the buffer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tokio_iocp::buf::IoBuf;
+    ///
+    /// let buf = b"hello world";
+    /// buf.slice(5..10);
+    /// ```
     fn slice(self, range: impl std::ops::RangeBounds<usize>) -> Slice<Self>
     where
         Self: Sized,

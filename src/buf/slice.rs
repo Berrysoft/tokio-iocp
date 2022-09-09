@@ -1,6 +1,26 @@
 use crate::buf::*;
 use std::ops::{Deref, DerefMut};
 
+/// An owned view into a contiguous sequence of bytes.
+///
+/// This is similar to Rust slices (`&buf[..]`) but owns the underlying buffer.
+/// This type is useful for performing io-uring read and write operations using
+/// a subset of a buffer.
+///
+/// Slices are created using [`IoBuf::slice`].
+///
+/// # Examples
+///
+/// Creating a slice
+///
+/// ```
+/// use tokio_iocp::buf::IoBuf;
+///
+/// let buf = b"hello world";
+/// let slice = buf.slice(..5);
+///
+/// assert_eq!(&slice[..], b"hello");
+/// ```
 pub struct Slice<T> {
     buffer: T,
     begin: usize,
@@ -12,22 +32,31 @@ impl<T> Slice<T> {
         Self { buffer, begin, end }
     }
 
+    /// Offset in the underlying buffer at which this slice starts.
     pub fn begin(&self) -> usize {
         self.begin
     }
 
+    /// Ofset in the underlying buffer at which this slice ends.
     pub fn end(&self) -> usize {
         self.end
     }
 
+    /// Gets a reference to the underlying buffer.
+    ///
+    /// This method escapes the slice's view.
     pub fn as_inner(&self) -> &T {
         &self.buffer
     }
 
+    /// Gets a mutable reference to the underlying buffer.
+    ///
+    /// This method escapes the slice's view.
     pub fn as_inner_mut(&mut self) -> &mut T {
         &mut self.buffer
     }
 
+    /// Returns the underlying buffer.
     pub fn into_inner(self) -> T {
         self.buffer
     }
