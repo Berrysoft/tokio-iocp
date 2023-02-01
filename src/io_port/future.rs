@@ -90,7 +90,10 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
         if res == 0 {
             let error = unsafe { GetLastError() };
             match error {
-                ERROR_IO_INCOMPLETE => Poll::Pending,
+                ERROR_IO_INCOMPLETE => {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
                 ERROR_HANDLE_EOF => Poll::Ready(this.result(Ok(0))),
                 _ => Poll::Ready(this.result(Err(IoError::from_raw_os_error(error as _)))),
             }
