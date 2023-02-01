@@ -11,16 +11,16 @@ use std::{
     os::windows::prelude::{AsRawSocket, AsSocket, FromRawSocket, OwnedSocket},
 };
 use windows_sys::Win32::Networking::WinSock::{
-    bind, connect, getpeername, getsockname, listen, shutdown, sockaddr_un, socket, WSACleanup,
-    WSAData, WSAStartup, ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNIX, INVALID_SOCKET, IPPROTO,
-    SD_BOTH, SD_RECEIVE, SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE, SOCKET,
+    bind, connect, getpeername, getsockname, listen, shutdown, socket, WSACleanup, WSAStartup,
+    ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNIX, INVALID_SOCKET, IPPROTO, SD_BOTH, SD_RECEIVE,
+    SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE, SOCKADDR_UN, SOCKET, WSADATA,
 };
 
 struct WSAInit;
 
 impl WSAInit {
     pub fn init() -> Self {
-        let mut data: WSAData = unsafe { std::mem::zeroed() };
+        let mut data: WSADATA = unsafe { std::mem::zeroed() };
         let ret = unsafe {
             WSAStartup(
                 0x202, // version 2.2
@@ -230,7 +230,7 @@ impl SockAddr for SocketAddr {
 
     unsafe fn try_from_native(addr: *const SOCKADDR, _len: i32) -> Option<Self> {
         let addr_ref = addr.as_ref().unwrap();
-        match addr_ref.sa_family as u32 {
+        match addr_ref.sa_family {
             AF_INET => {
                 let addr = addr.cast::<SOCKADDR_IN>().as_ref().unwrap();
                 Some(SocketAddr::V4(SocketAddrV4::new(
@@ -290,7 +290,7 @@ impl SockAddr for UnixSocketAddr {
     unsafe fn try_from_native(addr: *const SOCKADDR, len: i32) -> Option<Self> {
         let addr_ref = addr.as_ref().unwrap();
         if addr_ref.sa_family == AF_UNIX {
-            let addr = addr.cast::<sockaddr_un>().as_ref().unwrap();
+            let addr = addr.cast::<SOCKADDR_UN>().as_ref().unwrap();
             let len = (len - 2) as usize;
             Some(UnixSocketAddr {
                 path: addr.sun_path,
@@ -302,7 +302,7 @@ impl SockAddr for UnixSocketAddr {
     }
 
     unsafe fn with_native<T>(&self, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T {
-        let addr = sockaddr_un {
+        let addr = SOCKADDR_UN {
             sun_family: AF_UNIX,
             sun_path: self.path,
         };
