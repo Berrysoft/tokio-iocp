@@ -1,13 +1,11 @@
-use scopeguard::defer;
+use tempfile::tempdir;
 use tokio_iocp::net::{UnixListener, UnixStream};
 
 fn main() {
     tokio_iocp::start(async {
-        let path = format!("{}/unix-example.sock", std::env::var("TEMP").unwrap());
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("unix-example.sock");
         let listener = UnixListener::bind(&path).unwrap();
-        defer! {
-            std::fs::remove_file(&path).unwrap();
-        }
 
         let addr = listener.local_addr().unwrap();
 
