@@ -160,15 +160,13 @@ enum UnixAddressKind<'a> {
 ///
 /// ```
 /// use tokio_iocp::net::{UnixListener, UnixStream};
-/// use scopeguard::defer;
+/// use tempfile::tempdir;
 ///
-/// let sock_file = format!("{}/unix-server.sock", std::env::var("TEMP").unwrap());
+/// let dir = tempdir().unwrap();
+/// let sock_file = dir.path().join("unix-server.sock");
 ///
 /// tokio_iocp::start(async move {
 ///     let listener = UnixListener::bind(&sock_file).unwrap();
-///     defer! {
-///         std::fs::remove_file(&sock_file).unwrap();
-///     }
 ///
 ///     let tx = UnixStream::connect(&sock_file).unwrap();
 ///     let (rx, _) = listener.accept().await.unwrap();
@@ -221,13 +219,11 @@ impl UnixListener {
     /// ```
     /// use tokio_iocp::net::UnixListener;
     /// use std::path::Path;
-    /// use scopeguard::defer;
+    /// use tempfile::tempdir;
     ///
-    /// let sock_file = format!("{}/unix-server.sock", std::env::var("TEMP").unwrap());
+    /// let dir = tempdir().unwrap();
+    /// let sock_file = dir.path().join("unix-server.sock");
     /// let listener = UnixListener::bind(&sock_file).unwrap();
-    /// defer! {
-    ///     std::fs::remove_file(&sock_file).unwrap();
-    /// }
     ///
     /// let addr = listener.local_addr().expect("Couldn't get local address");
     /// assert_eq!(addr.as_pathname(), Some(Path::new(&sock_file)));

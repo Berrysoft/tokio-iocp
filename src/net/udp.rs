@@ -24,12 +24,14 @@ use windows_sys::Win32::Networking::WinSock::{IPPROTO_UDP, SOCK_DGRAM};
 /// use std::net::SocketAddr;
 ///
 /// tokio_iocp::start(async {
-///     let first_addr: SocketAddr = "127.0.0.1:2401".parse().unwrap();
-///     let second_addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+///     let first_addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+///     let second_addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
 ///
 ///     // bind sockets
 ///     let socket = UdpSocket::bind(first_addr).unwrap();
+///     let first_addr = socket.local_addr().unwrap();
 ///     let other_socket = UdpSocket::bind(second_addr).unwrap();
+///     let second_addr = other_socket.local_addr().unwrap();
 ///
 ///     // connect sockets
 ///     socket.connect(second_addr).unwrap();
