@@ -18,9 +18,9 @@ use windows_sys::{
     },
 };
 
-pub trait IocpOperation: Unpin {
-    type Output: Unpin;
-    type Buffer: Unpin;
+pub trait IocpOperation {
+    type Output;
+    type Buffer;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()>;
     fn set_buf_len(&mut self, len: usize);

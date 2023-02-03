@@ -1,13 +1,13 @@
 use windows_sys::Win32::Networking::WinSock::WSABUF;
 
-pub trait WrapBuf: Unpin {
-    type Buffer: Unpin;
+pub trait WrapBuf {
+    type Buffer;
 
     fn new(buffer: Self::Buffer) -> Self;
     fn take_buf(&mut self) -> Self::Buffer;
 }
 
-pub trait WrapBufMut: WrapBuf {
+pub trait WrapBufMut {
     fn set_len(&mut self, len: usize);
 }
 

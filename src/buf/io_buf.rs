@@ -10,7 +10,7 @@ use crate::buf::*;
 /// Buffers passed to IOCP operations must reference a stable memory
 /// region. While the runtime holds ownership to a buffer, the pointer returned
 /// by `as_buf_ptr` must remain valid even if the `IoBuf` value is moved.
-pub unsafe trait IoBuf: Unpin + 'static {
+pub unsafe trait IoBuf {
     /// Returns a raw pointer to the vector’s buffer.
     ///
     /// This method is to be used by the `tokio-iocp` runtime and it is not

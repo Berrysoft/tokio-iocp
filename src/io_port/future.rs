@@ -62,7 +62,7 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
     type Output = BufResult<Op::Output, Op::Buffer>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.get_mut();
+        let this = unsafe { self.get_unchecked_mut() };
 
         let overlapped = match this.overlapped.get_or_try_init(|| {
             let overlapped = Box::new(OverlappedWaker::new(cx.waker().clone()));
