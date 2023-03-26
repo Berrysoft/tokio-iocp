@@ -48,12 +48,11 @@ fn iocp(b: &mut Bencher) {
 
     b.iter(|| {
         runtime.block_on(async {
-            use tokio_iocp::buf::IoBuf;
             let mut buffer = Vec::with_capacity(1024);
             while buffer.len() < size {
                 let old_len = buffer.len();
-                let (n, sbuf) = file.read_at(buffer.slice(old_len..), old_len).await;
-                buffer = sbuf.into_inner();
+                let (n, sbuf) = file.read_at(buffer, old_len).await;
+                buffer = sbuf;
                 let n = n.unwrap();
                 if n == 0 {
                     break;
