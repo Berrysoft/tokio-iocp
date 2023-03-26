@@ -1,6 +1,6 @@
 [package]
 name = "tokio-iocp"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Berrysoft <Strawberry_Str@hotmail.com"]
 readme = "README.md"
 license = "MIT"
@@ -17,10 +17,10 @@ windows-sys = { version = "0.45", features = [
     "Win32_Foundation",
     "Win32_Networking_WinSock",
     "Win32_Storage_FileSystem",
-    "Win32_System_IO"
+    "Win32_System_IO",
 ] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net"] }
 futures-util = "0.3"
-tempfile = "3.3"
+tempfile = "3.4"
