@@ -160,6 +160,36 @@ unsafe impl IoBuf for &'static str {
     }
 }
 
+#[cfg(feature = "bytes")]
+unsafe impl IoBuf for bytes::Bytes {
+    fn as_buf_ptr(&self) -> *const u8 {
+        self.as_ptr()
+    }
+
+    fn buf_len(&self) -> usize {
+        self.len()
+    }
+
+    fn buf_capacity(&self) -> usize {
+        self.len()
+    }
+}
+
+#[cfg(feature = "bytes")]
+unsafe impl IoBuf for bytes::BytesMut {
+    fn as_buf_ptr(&self) -> *const u8 {
+        self.as_ptr()
+    }
+
+    fn buf_len(&self) -> usize {
+        self.len()
+    }
+
+    fn buf_capacity(&self) -> usize {
+        self.capacity()
+    }
+}
+
 /// A mutable IOCP compatible buffer.
 ///
 /// The `IoBufMut` trait is implemented by buffer types that can be passed to
@@ -193,9 +223,7 @@ unsafe impl IoBufMut for Vec<u8> {
     }
 
     fn set_buf_len(&mut self, len: usize) {
-        if len > self.buf_len() {
-            unsafe { self.set_len(len) };
-        }
+        unsafe { self.set_len(len) };
     }
 }
 
@@ -206,5 +234,16 @@ unsafe impl IoBufMut for &'static mut [u8] {
 
     fn set_buf_len(&mut self, len: usize) {
         assert!(len <= self.buf_capacity())
+    }
+}
+
+#[cfg(feature = "bytes")]
+unsafe impl IoBufMut for bytes::BytesMut {
+    fn as_buf_mut_ptr(&mut self) -> *mut u8 {
+        self.as_mut_ptr()
+    }
+
+    fn set_buf_len(&mut self, len: usize) {
+        unsafe { self.set_len(len) };
     }
 }
