@@ -35,7 +35,10 @@ impl<T: IoBufMut> WrapBufMut for BufWrapper<T> {
 impl<T: IoBufMut> WithBufMut for BufWrapper<T> {
     fn with_buf_mut<R>(&mut self, f: impl FnOnce(*mut u8, usize) -> R) -> R {
         let buffer = self.buffer.as_mut().unwrap();
-        f(buffer.as_buf_mut_ptr(), buffer.buf_capacity())
+        f(
+            unsafe { buffer.as_buf_mut_ptr().add(buffer.buf_len()) },
+            buffer.buf_capacity(),
+        )
     }
 }
 
@@ -55,7 +58,7 @@ impl<T: IoBufMut> WithWsaBufMut for BufWrapper<T> {
         let buffer = self.buffer.as_mut().unwrap();
         let buffer = WSABUF {
             len: buffer.buf_capacity() as _,
-            buf: buffer.as_buf_mut_ptr(),
+            buf: unsafe { buffer.as_buf_mut_ptr().add(buffer.buf_len()) },
         };
         f(&buffer, 1)
     }
@@ -113,7 +116,7 @@ impl<T: IoBufMut> WithWsaBufMut for VectoredBufWrapper<T> {
             .iter_mut()
             .map(|buf| WSABUF {
                 len: buf.buf_capacity() as _,
-                buf: buf.as_buf_mut_ptr() as _,
+                buf: unsafe { buf.as_buf_mut_ptr().add(buf.buf_len()) } as _,
             })
             .collect::<Vec<_>>();
         f(buffers.as_ptr(), buffers.len())

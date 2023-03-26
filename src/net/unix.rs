@@ -173,7 +173,7 @@ enum UnixAddressKind<'a> {
 ///
 ///     tx.send("test").await.0.unwrap();
 ///
-///     let (res, buf) = rx.recv(vec![0; 4]).await;
+///     let (res, buf) = rx.recv(Vec::with_capacity(4)).await;
 ///     res.unwrap();
 ///
 ///     assert_eq!(buf, b"test");

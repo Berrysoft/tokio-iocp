@@ -51,7 +51,7 @@ fn complete_ops_on_drop() {
         poll_once(async {
             file.read_at(
                 MyBuf {
-                    data: vec![0; 64 * 1024],
+                    data: Vec::with_capacity(64 * 1024),
                     _ref_cnt: ref_cnt.clone(),
                 },
                 25 * 1024 * 1024,

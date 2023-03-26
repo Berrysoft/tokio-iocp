@@ -30,7 +30,7 @@ use windows_sys::Win32::Networking::WinSock::{IPPROTO_TCP, SOCK_STREAM, SOMAXCON
 ///
 ///     tx.send("test").await.0.unwrap();
 ///
-///     let (_, buf) = rx.recv(vec![0; 4]).await;
+///     let (_, buf) = rx.recv(Vec::with_capacity(4)).await;
 ///
 ///     assert_eq!(buf, b"test");
 /// });
