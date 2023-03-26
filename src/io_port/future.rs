@@ -1,14 +1,15 @@
-use crate::{io_port::waker::OverlappedWaker, op::IocpOperation, *};
-use once_cell::unsync::OnceCell;
+use crate::{io_port::waker::*, op::IocpOperation, *};
 use std::{
     future::Future,
+    marker::PhantomData,
     os::windows::prelude::{AsRawHandle, AsRawSocket, BorrowedHandle, BorrowedSocket},
     pin::Pin,
+    rc::Rc,
     task::{Context, Poll},
 };
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE},
-    System::IO::{CancelIoEx, GetOverlappedResult},
+    System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED},
 };
 
 pub enum BorrowedRes<'a> {
@@ -37,47 +38,64 @@ impl<'a> From<BorrowedSocket<'a>> for BorrowedRes<'a> {
     }
 }
 
-pub struct IocpFuture<'a, Op: IocpOperation> {
-    handle: BorrowedRes<'a>,
-    op: Op,
-    overlapped: OnceCell<Box<OverlappedWaker>>,
+#[derive(Debug, Clone, Copy)]
+enum IocpFutureState {
+    NotPolled,
+    Started,
+    Finished,
 }
 
-impl<'a, Op: IocpOperation> IocpFuture<'a, Op> {
+pub struct IocpFuture<'a, Op: IocpOperation> {
+    handle: BorrowedRes<'a>,
+    overlapped: Rc<OverlappedWaker>,
+    _p: PhantomData<Rc<Op>>,
+    state: IocpFutureState,
+}
+
+impl<'a, Op: IocpOperation + 'static> IocpFuture<'a, Op> {
     pub fn new(handle: impl Into<BorrowedRes<'a>>, op: Op) -> Self {
         Self {
             handle: handle.into(),
-            op,
-            overlapped: OnceCell::new(),
+            overlapped: Rc::new(OverlappedWaker::new(IoWakerOp::new(op))),
+            _p: PhantomData,
+            state: IocpFutureState::NotPolled,
         }
     }
 
     fn result(&mut self, res: IoResult<usize>) -> BufResult<Op::Output, Op::Buffer> {
-        _ = self.overlapped.take();
-        self.op.result(res)
+        self.state = IocpFutureState::Finished;
+        unsafe { self.overlapped.waker().op_mut::<Op>() }.result(res)
     }
 }
 
-impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
+impl<Op: IocpOperation + 'static> Future for IocpFuture<'_, Op> {
     type Output = BufResult<Op::Output, Op::Buffer>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = unsafe { self.get_unchecked_mut() };
 
-        let overlapped = match this.overlapped.get_or_try_init(|| {
-            let overlapped = Box::new(OverlappedWaker::new(cx.waker().clone()));
-            unsafe {
-                this.op
-                    .operate(this.handle.as_raw_handle() as _, overlapped.as_ptr() as _)?;
+        if let IocpFutureState::NotPolled = this.state {
+            let overlapped_ptr =
+                Rc::into_raw(this.overlapped.clone()) as *const OVERLAPPED as *mut OVERLAPPED;
+            let res = unsafe {
+                this.overlapped
+                    .waker()
+                    .op_mut::<Op>()
+                    .operate(this.handle.as_raw_handle() as _, overlapped_ptr)
+            };
+            match res {
+                Ok(()) => {
+                    this.state = IocpFutureState::Started;
+                }
+                Err(e) => {
+                    return Poll::Ready(this.result(Err(e)));
+                }
             }
-            Ok(overlapped)
-        }) {
-            Ok(o) => o,
-            Err(e) => return Poll::Ready(this.result(Err(e))),
-        };
+        }
+
         // We need to set the recent waker.
-        overlapped.set_waker(cx.waker().clone());
-        let overlapped_ptr = overlapped.as_ptr();
+        this.overlapped.waker().set_waker(cx.waker().clone());
+        let overlapped_ptr = this.overlapped.as_ref() as *const _ as *const OVERLAPPED;
         let mut transferred = 0;
         let res = unsafe {
             GetOverlappedResult(
@@ -98,10 +116,10 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
                 _ => Poll::Ready(this.result(Err(IoError::from_raw_os_error(error as _)))),
             }
         } else {
-            match overlapped.take_err() {
+            match this.overlapped.waker().take_err() {
                 None => {
                     let transferred = transferred as usize;
-                    this.op.set_buf_len(transferred);
+                    unsafe { this.overlapped.waker().op_mut::<Op>() }.set_buf_len(transferred);
                     Poll::Ready(this.result(Ok(transferred)))
                 }
                 Some(err) => Poll::Ready(this.result(Err(err))),
@@ -112,8 +130,15 @@ impl<Op: IocpOperation> Future for IocpFuture<'_, Op> {
 
 impl<Op: IocpOperation> Drop for IocpFuture<'_, Op> {
     fn drop(&mut self) {
-        if let Some(overlapped) = self.overlapped.get() {
-            unsafe { CancelIoEx(self.handle.as_raw_handle() as _, overlapped.as_ptr()) };
+        if let IocpFutureState::Finished = self.state {
+            // Finished, no need to cancel.
+        } else {
+            unsafe {
+                CancelIoEx(
+                    self.handle.as_raw_handle() as _,
+                    self.overlapped.as_ref() as *const _ as *const OVERLAPPED,
+                )
+            };
         }
     }
 }

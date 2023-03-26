@@ -7,6 +7,7 @@ use crate::*;
 use std::{
     os::windows::prelude::{AsRawHandle, FromRawHandle, OwnedHandle},
     ptr::null_mut,
+    rc::Rc,
 };
 use windows_sys::Win32::{
     Foundation::{GetLastError, ERROR_HANDLE_EOF, INVALID_HANDLE_VALUE, WAIT_TIMEOUT},
@@ -70,10 +71,11 @@ impl IoPort {
         if let Some(overlapped) =
             unsafe { overlapped_ptr.cast::<waker::OverlappedWaker>().as_ref() }
         {
+            let overlapped = unsafe { Rc::from_raw(overlapped) };
             if let Some(err) = err {
-                overlapped.set_err(err);
+                overlapped.waker().set_err(err);
             }
-            if let Some(waker) = overlapped.take_waker() {
+            if let Some(waker) = overlapped.waker().take_waker() {
                 waker.wake();
             }
         }

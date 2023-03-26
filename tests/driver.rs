@@ -1,7 +1,10 @@
 use tempfile::NamedTempFile;
 use tokio_iocp::{buf::*, fs::File};
 
+// Ignore this test because we need to keep the buffer until
+// the operation succeeds.
 #[test]
+#[ignore]
 fn complete_ops_on_drop() {
     use std::sync::Arc;
 

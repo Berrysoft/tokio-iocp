@@ -93,7 +93,7 @@ impl Socket {
         }
     }
 
-    pub async fn connect_ex(&self, addr: impl SockAddr) -> IoResult<()> {
+    pub async fn connect_ex(&self, addr: impl SockAddr + 'static) -> IoResult<()> {
         IocpFuture::new(self.as_socket(), Connect::new(addr))
             .await
             .0
@@ -136,7 +136,11 @@ impl Socket {
         self.get_addr(getsockname)
     }
 
-    pub async fn accept<A: SockAddr>(&self, ty: u16, protocol: IPPROTO) -> IoResult<(Socket, A)> {
+    pub async fn accept<A: SockAddr + 'static>(
+        &self,
+        ty: u16,
+        protocol: IPPROTO,
+    ) -> IoResult<(Socket, A)> {
         let local_addr: A = self.local_addr()?;
         let accept_socket = Socket::new(local_addr.domain() as _, ty, protocol)?;
         let (res, accept_socket) =
