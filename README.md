@@ -14,7 +14,7 @@ provides new resource types that work with [IOCP].
 
 # Getting started
 
-Using `tokio-iocp` requires starting a [`tokio-iocp`] runtime. This
+Using `tokio-iocp` requires starting a `tokio-iocp` runtime. This
 runtime internally manages the main (single-threaded) Tokio runtime and a IOCP driver.
 
 ```rust
