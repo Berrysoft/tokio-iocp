@@ -42,14 +42,13 @@ fn tokio(b: &mut Bencher) {
 
 #[bench]
 fn iocp(b: &mut Bencher) {
-    let size = std::fs::metadata("Cargo.toml").unwrap().len() as usize;
     let file = tokio_iocp::fs::File::open("Cargo.toml").unwrap();
     let runtime = tokio_iocp::runtime::Runtime::new().unwrap();
 
     b.iter(|| {
         runtime.block_on(async {
             let mut buffer = Vec::with_capacity(1024);
-            while buffer.len() < size {
+            loop {
                 let old_len = buffer.len();
                 let (n, sbuf) = file.read_at(buffer, old_len).await;
                 buffer = sbuf;
