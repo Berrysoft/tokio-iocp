@@ -4,7 +4,7 @@ criterion_group!(net, tcp);
 criterion_main!(net);
 
 fn tcp(c: &mut Criterion) {
-    const PACKET_LEN: usize = 65536;
+    const PACKET_LEN: usize = 1048576;
     static PACKET: &[u8] = &[1u8; PACKET_LEN];
 
     let mut group = c.benchmark_group("tcp");
