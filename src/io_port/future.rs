@@ -88,6 +88,9 @@ impl<Op: IocpOperation + 'static> Future for IocpFuture<'_, Op> {
                     this.state = IocpFutureState::Started;
                 }
                 Err(e) => {
+                    unsafe {
+                        let _ = Rc::from_raw(overlapped_ptr as *mut OverlappedWaker);
+                    }
                     return Poll::Ready(this.result(Err(e)));
                 }
             }
