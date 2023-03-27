@@ -133,6 +133,7 @@ impl<Op: IocpOperation> Drop for IocpFuture<'_, Op> {
         if let IocpFutureState::Finished = self.state {
             // Finished, no need to cancel.
         } else {
+            self.overlapped.waker().take_waker();
             unsafe {
                 CancelIoEx(
                     self.handle.as_raw_handle() as _,
