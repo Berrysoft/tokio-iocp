@@ -28,6 +28,10 @@ futures-util = "0.3"
 tempfile = "3.4"
 criterion = { version = "0.4", features = ["async_tokio"] }
 
+[[example]]
+name = "net"
+required-features = ["read_buf"]
+
 [[bench]]
 name = "fs"
 harness = false
@@ -37,3 +41,8 @@ required-features = ["criterion"]
 name = "net"
 harness = false
 required-features = ["criterion"]
+
+[features]
+default = []
+read_buf = []
+nightly = ["read_buf"]

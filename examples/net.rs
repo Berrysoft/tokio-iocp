@@ -1,4 +1,6 @@
-use std::net::Ipv4Addr;
+#![feature(read_buf)]
+
+use std::{io::BorrowedBuf, mem::MaybeUninit, net::Ipv4Addr};
 use tokio_iocp::net::{TcpListener, TcpStream};
 
 fn main() {
@@ -9,9 +11,10 @@ fn main() {
         let (tx, (rx, _)) = tokio::try_join!(TcpStream::connect(addr), listener.accept()).unwrap();
         tx.send("Hello world!").await.0.unwrap();
 
-        let buffer = Vec::with_capacity(64);
+        static mut BUFFER: &mut [MaybeUninit<u8>] = &mut [MaybeUninit::uninit(); 64];
+        let buffer = unsafe { BorrowedBuf::from(&mut BUFFER[..]) };
         let (n, buffer) = rx.recv(buffer).await;
         assert_eq!(n.unwrap(), buffer.len());
-        println!("{}", String::from_utf8(buffer).unwrap());
+        println!("{}", String::from_utf8_lossy(buffer.filled()));
     });
 }

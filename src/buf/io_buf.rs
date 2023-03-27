@@ -190,6 +190,21 @@ unsafe impl IoBuf for bytes::BytesMut {
     }
 }
 
+#[cfg(feature = "read_buf")]
+unsafe impl IoBuf for std::io::BorrowedBuf<'static> {
+    fn as_buf_ptr(&self) -> *const u8 {
+        self.filled().as_ptr()
+    }
+
+    fn buf_len(&self) -> usize {
+        self.len()
+    }
+
+    fn buf_capacity(&self) -> usize {
+        self.capacity()
+    }
+}
+
 /// A mutable IOCP compatible buffer.
 ///
 /// The `IoBufMut` trait is implemented by buffer types that can be passed to
@@ -233,7 +248,7 @@ unsafe impl IoBufMut for &'static mut [u8] {
     }
 
     fn set_buf_init(&mut self, len: usize) {
-        assert!(len == 0)
+        debug_assert!(len == 0)
     }
 }
 
@@ -245,5 +260,16 @@ unsafe impl IoBufMut for bytes::BytesMut {
 
     fn set_buf_init(&mut self, len: usize) {
         unsafe { self.set_len(len + self.buf_len()) };
+    }
+}
+
+#[cfg(feature = "read_buf")]
+unsafe impl IoBufMut for std::io::BorrowedBuf<'static> {
+    fn as_buf_mut_ptr(&mut self) -> *mut u8 {
+        self.filled().as_ptr() as _
+    }
+
+    fn set_buf_init(&mut self, len: usize) {
+        unsafe { self.unfilled().advance(len) };
     }
 }

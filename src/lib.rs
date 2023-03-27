@@ -43,6 +43,7 @@
 //! For example, in the above example, reading from a `File` requires passing
 //! ownership of the buffer.
 
+#![cfg_attr(feature = "read_buf", feature(read_buf))]
 #![warn(missing_docs)]
 
 pub mod buf;
