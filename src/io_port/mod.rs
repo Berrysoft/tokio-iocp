@@ -75,7 +75,8 @@ impl IoPort {
             if let Some(err) = err {
                 overlapped.waker().set_err(err);
             }
-            if let Some(waker) = overlapped.waker().take_waker() {
+            let waker = overlapped.waker().take_waker();
+            if let Some(waker) = waker {
                 waker.wake();
             }
         }
