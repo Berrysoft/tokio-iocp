@@ -212,9 +212,9 @@ pub unsafe trait IoBufMut: IoBuf {
 
     /// Updates the number of initialized bytes.
     ///
-    /// The specified `len` becomes the new value returned by
+    /// The specified `len` plus [`IoBuf::buf_len`] becomes the new value returned by
     /// [`IoBuf::buf_len`].
-    fn set_buf_len(&mut self, len: usize);
+    fn set_buf_init(&mut self, len: usize);
 }
 
 unsafe impl IoBufMut for Vec<u8> {
@@ -222,8 +222,8 @@ unsafe impl IoBufMut for Vec<u8> {
         self.as_mut_ptr()
     }
 
-    fn set_buf_len(&mut self, len: usize) {
-        unsafe { self.set_len(len) };
+    fn set_buf_init(&mut self, len: usize) {
+        unsafe { self.set_len(len + self.buf_len()) };
     }
 }
 
@@ -232,8 +232,8 @@ unsafe impl IoBufMut for &'static mut [u8] {
         self.as_mut_ptr()
     }
 
-    fn set_buf_len(&mut self, len: usize) {
-        assert!(len <= self.buf_capacity())
+    fn set_buf_init(&mut self, len: usize) {
+        assert!(len == 0)
     }
 }
 
@@ -243,7 +243,7 @@ unsafe impl IoBufMut for bytes::BytesMut {
         self.as_mut_ptr()
     }
 
-    fn set_buf_len(&mut self, len: usize) {
-        unsafe { self.set_len(len) };
+    fn set_buf_init(&mut self, len: usize) {
+        unsafe { self.set_len(len + self.buf_len()) };
     }
 }

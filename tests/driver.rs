@@ -32,8 +32,8 @@ fn complete_ops_on_drop() {
             self.data.as_buf_mut_ptr()
         }
 
-        fn set_buf_len(&mut self, pos: usize) {
-            self.data.set_buf_len(pos);
+        fn set_buf_init(&mut self, pos: usize) {
+            self.data.set_buf_init(pos);
         }
     }
 

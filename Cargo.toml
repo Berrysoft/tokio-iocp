@@ -1,6 +1,6 @@
 [package]
 name = "tokio-iocp"
-version = "0.1.4"
+version = "0.2.0"
 authors = ["Berrysoft <Strawberry_Str@hotmail.com"]
 readme = "README.md"
 license = "MIT"
@@ -30,5 +30,10 @@ criterion = { version = "0.4", features = ["async_tokio"] }
 
 [[bench]]
 name = "fs"
+harness = false
+required-features = ["criterion"]
+
+[[bench]]
+name = "net"
 harness = false
 required-features = ["criterion"]

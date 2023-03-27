@@ -8,7 +8,7 @@ pub trait WrapBuf {
 }
 
 pub trait WrapBufMut {
-    fn set_len(&mut self, len: usize);
+    fn set_init(&mut self, len: usize);
 }
 
 pub trait WithBuf: WrapBuf {

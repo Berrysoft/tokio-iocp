@@ -39,7 +39,7 @@ impl<T: WithWsaBuf, A: SockAddr> IocpOperation for SendTo<T, A> {
         win32_result(res)
     }
 
-    fn set_buf_len(&mut self, _len: usize) {}
+    fn set_buf_init(&mut self, _len: usize) {}
 
     fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer> {
         (res, self.buffer.take_buf())

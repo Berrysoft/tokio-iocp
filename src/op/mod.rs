@@ -23,7 +23,7 @@ pub trait IocpOperation {
     type Buffer;
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()>;
-    fn set_buf_len(&mut self, len: usize);
+    fn set_buf_init(&mut self, len: usize);
 
     fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer>;
 }

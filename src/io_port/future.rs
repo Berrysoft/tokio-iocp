@@ -122,7 +122,7 @@ impl<Op: IocpOperation + 'static> Future for IocpFuture<'_, Op> {
             match this.overlapped.waker().take_err() {
                 None => {
                     let transferred = transferred as usize;
-                    unsafe { this.overlapped.waker().op_mut::<Op>() }.set_buf_len(transferred);
+                    unsafe { this.overlapped.waker().op_mut::<Op>() }.set_buf_init(transferred);
                     Poll::Ready(this.result(Ok(transferred)))
                 }
                 Some(err) => Poll::Ready(this.result(Err(err))),

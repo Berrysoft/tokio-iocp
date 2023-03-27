@@ -11,7 +11,7 @@ fn main() {
 
         let buffer = Vec::with_capacity(64);
         let (n, buffer) = rx.recv(buffer).await;
-        n.unwrap();
+        assert_eq!(n.unwrap(), buffer.len());
         println!("{}", String::from_utf8(buffer).unwrap());
     });
 }

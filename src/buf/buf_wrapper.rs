@@ -27,8 +27,8 @@ impl<T: IoBuf> WithBuf for BufWrapper<T> {
 }
 
 impl<T: IoBufMut> WrapBufMut for BufWrapper<T> {
-    fn set_len(&mut self, len: usize) {
-        self.buffer.as_mut().unwrap().set_buf_len(len)
+    fn set_init(&mut self, len: usize) {
+        self.buffer.as_mut().unwrap().set_buf_init(len)
     }
 }
 
@@ -37,7 +37,7 @@ impl<T: IoBufMut> WithBufMut for BufWrapper<T> {
         let buffer = self.buffer.as_mut().unwrap();
         f(
             unsafe { buffer.as_buf_mut_ptr().add(buffer.buf_len()) },
-            buffer.buf_capacity(),
+            buffer.buf_capacity() - buffer.buf_len(),
         )
     }
 }
@@ -57,7 +57,7 @@ impl<T: IoBufMut> WithWsaBufMut for BufWrapper<T> {
     fn with_wsa_buf_mut<R>(&mut self, f: impl FnOnce(*const WSABUF, usize) -> R) -> R {
         let buffer = self.buffer.as_mut().unwrap();
         let buffer = WSABUF {
-            len: buffer.buf_capacity() as _,
+            len: (buffer.buf_capacity() - buffer.buf_len()) as _,
             buf: unsafe { buffer.as_buf_mut_ptr().add(buffer.buf_len()) },
         };
         f(&buffer, 1)
@@ -95,14 +95,14 @@ impl<T: IoBuf> WithWsaBuf for VectoredBufWrapper<T> {
 }
 
 impl<T: IoBufMut> WrapBufMut for VectoredBufWrapper<T> {
-    fn set_len(&mut self, mut len: usize) {
+    fn set_init(&mut self, mut len: usize) {
         for buf in self.buffer.iter_mut() {
             let capacity = buf.buf_capacity();
             if len >= capacity {
-                buf.set_buf_len(capacity);
+                buf.set_buf_init(capacity);
                 len -= capacity;
             } else {
-                buf.set_buf_len(len);
+                buf.set_buf_init(len);
                 len = 0;
             }
         }
@@ -115,7 +115,7 @@ impl<T: IoBufMut> WithWsaBufMut for VectoredBufWrapper<T> {
             .buffer
             .iter_mut()
             .map(|buf| WSABUF {
-                len: buf.buf_capacity() as _,
+                len: (buf.buf_capacity() - buf.buf_len()) as _,
                 buf: unsafe { buf.as_buf_mut_ptr().add(buf.buf_len()) } as _,
             })
             .collect::<Vec<_>>();

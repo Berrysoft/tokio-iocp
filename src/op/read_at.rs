@@ -30,8 +30,8 @@ impl<T: IoBufMut> IocpOperation for ReadAt<T> {
         win32_result(res)
     }
 
-    fn set_buf_len(&mut self, len: usize) {
-        self.buffer.set_len(len)
+    fn set_buf_init(&mut self, len: usize) {
+        self.buffer.set_init(len)
     }
 
     fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer> {
