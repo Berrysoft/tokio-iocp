@@ -1,20 +1,14 @@
-#![feature(test)]
+use criterion::{criterion_group, criterion_main, Criterion};
 
-use test::Bencher;
+criterion_group!(read, std, tokio, iocp);
+criterion_main!(read);
 
-extern crate test;
-
-#[bench]
-fn std(b: &mut Bencher) {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-    let mut file = std::fs::File::open("Cargo.toml").unwrap();
-
-    b.iter(|| {
-        runtime.block_on(async {
+fn std(c: &mut Criterion) {
+    c.bench_function("std", |b| {
+        b.iter(|| {
             use std::io::Read;
+
+            let mut file = std::fs::File::open("Cargo.toml").unwrap();
             let mut buffer = Vec::with_capacity(1024);
             file.read_to_end(&mut buffer).unwrap();
             buffer
@@ -22,31 +16,29 @@ fn std(b: &mut Bencher) {
     });
 }
 
-#[bench]
-fn tokio(b: &mut Bencher) {
+fn tokio(c: &mut Criterion) {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
-    let mut file = runtime.block_on(async { tokio::fs::File::open("Cargo.toml").await.unwrap() });
-
-    b.iter(|| {
-        runtime.block_on(async {
+    c.bench_function("tokio", |b| {
+        b.to_async(&runtime).iter(|| async {
             use tokio::io::AsyncReadExt;
+
+            let mut file = tokio::fs::File::open("Cargo.toml").await.unwrap();
             let mut buffer = Vec::with_capacity(1024);
             file.read_to_end(&mut buffer).await.unwrap();
             buffer
         })
-    })
+    });
 }
 
-#[bench]
-fn iocp(b: &mut Bencher) {
-    let file = tokio_iocp::fs::File::open("Cargo.toml").unwrap();
+fn iocp(c: &mut Criterion) {
     let runtime = tokio_iocp::runtime::Runtime::new().unwrap();
 
-    b.iter(|| {
-        runtime.block_on(async {
+    c.bench_function("iocp", |b| {
+        b.to_async(&runtime).iter(|| async {
+            let file = tokio_iocp::fs::File::open("Cargo.toml").unwrap();
             let mut buffer = Vec::with_capacity(1024);
             loop {
                 let old_len = buffer.len();
@@ -59,5 +51,5 @@ fn iocp(b: &mut Bencher) {
             }
             buffer
         })
-    })
+    });
 }

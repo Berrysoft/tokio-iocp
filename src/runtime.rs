@@ -58,3 +58,17 @@ impl Runtime {
 pub fn spawn<F: Future + 'static>(future: F) -> JoinHandle<F::Output> {
     tokio::task::spawn_local(future)
 }
+
+#[cfg(feature = "criterion")]
+impl criterion::async_executor::AsyncExecutor for Runtime {
+    fn block_on<T>(&self, future: impl Future<Output = T>) -> T {
+        self.block_on(future)
+    }
+}
+
+#[cfg(feature = "criterion")]
+impl criterion::async_executor::AsyncExecutor for &Runtime {
+    fn block_on<T>(&self, future: impl Future<Output = T>) -> T {
+        (*self).block_on(future)
+    }
+}
