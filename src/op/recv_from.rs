@@ -1,10 +1,11 @@
 use crate::{net::*, op::*};
+use aligned_array::{Aligned, A4};
 use std::{marker::PhantomData, ptr::NonNull};
 use windows_sys::Win32::Networking::WinSock::WSARecvFrom;
 
 pub struct RecvFrom<T: WithWsaBufMut, A: SockAddr> {
     buffer: T,
-    addr_buffer: [u8; MAX_ADDR_SIZE],
+    addr_buffer: Aligned<A4, [u8; MAX_ADDR_SIZE]>,
     addr_size: i32,
     _marker: PhantomData<A>,
 }
@@ -13,7 +14,7 @@ impl<T: WithWsaBufMut, A: SockAddr> RecvFrom<T, A> {
     pub fn new(buffer: T::Buffer) -> Self {
         Self {
             buffer: T::new(buffer),
-            addr_buffer: [0; MAX_ADDR_SIZE],
+            addr_buffer: Aligned([0; MAX_ADDR_SIZE]),
             addr_size: MAX_ADDR_SIZE as _,
             _marker: PhantomData,
         }

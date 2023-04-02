@@ -5,6 +5,7 @@ use crate::{
     op::{accept::*, connect::*, recv::*, recv_from::*, send::*, send_to::*},
     *,
 };
+use aligned_array::{Aligned, A4};
 use once_cell::sync::OnceCell as OnceLock;
 use std::{
     net::{Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
@@ -118,7 +119,7 @@ impl Socket {
         &self,
         f: unsafe extern "system" fn(SOCKET, *mut SOCKADDR, *mut i32) -> i32,
     ) -> IoResult<A> {
-        let mut name = [0u8; MAX_ADDR_SIZE];
+        let mut name: Aligned<A4, _> = Aligned([0u8; MAX_ADDR_SIZE]);
         let mut namelen: i32 = MAX_ADDR_SIZE as _;
         let res = unsafe {
             f(

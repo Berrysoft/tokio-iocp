@@ -1,4 +1,5 @@
 use crate::{net::*, op::*};
+use aligned_array::{Aligned, A4};
 use once_cell::sync::OnceCell as OnceLock;
 use std::{
     marker::PhantomData,
@@ -12,7 +13,7 @@ static GET_ADDRS: OnceLock<LPFN_GETACCEPTEXSOCKADDRS> = OnceLock::new();
 
 pub struct Accept<A: SockAddr> {
     accept_handle: Option<OwnedSocket>,
-    addr_buffer: [u8; MAX_ADDR_SIZE * 2],
+    addr_buffer: Aligned<A4, [u8; MAX_ADDR_SIZE * 2]>,
     _marker: PhantomData<A>,
 }
 
@@ -20,7 +21,7 @@ impl<A: SockAddr> Accept<A> {
     pub fn new(handle: OwnedSocket) -> Self {
         Self {
             accept_handle: Some(handle),
-            addr_buffer: [0; MAX_ADDR_SIZE * 2],
+            addr_buffer: Aligned([0; MAX_ADDR_SIZE * 2]),
             _marker: PhantomData,
         }
     }
