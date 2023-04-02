@@ -4,8 +4,7 @@ use tokio_iocp::{buf::*, fs::File};
 // Ignore this test because we need to keep the buffer until
 // the operation succeeds.
 #[test]
-#[ignore]
-fn complete_ops_on_drop() {
+fn drop_on_complete() {
     use std::sync::Arc;
 
     struct MyBuf {
@@ -48,20 +47,16 @@ fn complete_ops_on_drop() {
 
     let file = tokio_iocp::start(async {
         let file = File::open(tempfile.path()).unwrap();
-        poll_once(async {
-            file.read_at(
-                MyBuf {
-                    data: Vec::with_capacity(64 * 1024),
-                    _ref_cnt: ref_cnt.clone(),
-                },
-                25 * 1024 * 1024,
-            )
-            .await
-            .0
-            .unwrap();
-        })
-        .await;
-
+        file.read_at(
+            MyBuf {
+                data: Vec::with_capacity(64 * 1024),
+                _ref_cnt: ref_cnt.clone(),
+            },
+            25 * 1024 * 1024,
+        )
+        .await
+        .0
+        .unwrap();
         file
     });
 
