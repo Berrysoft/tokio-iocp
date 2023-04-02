@@ -4,7 +4,7 @@ use tokio_iocp::{fs::File, IoResult};
 fn main() -> IoResult<()> {
     tokio_iocp::start(async {
         let file = File::open("Cargo.toml")?;
-        let buf = Vec::with_capacity(1024);
+        let buf = Vec::with_capacity(16384);
         let (n, buf) = file.read_at(buf, 0).await;
         let n = n?;
         assert_eq!(n, buf.len());

@@ -40,15 +40,6 @@ pub unsafe fn win32_result(res: i32) -> IoResult<()> {
     }
 }
 
-pub const fn guid_from_u128(uuid: u128) -> GUID {
-    GUID {
-        data1: (uuid >> 96) as u32,
-        data2: (uuid >> 80 & 0xffff) as u16,
-        data3: (uuid >> 64 & 0xffff) as u16,
-        data4: (uuid as u64).to_be_bytes(),
-    }
-}
-
 pub unsafe fn get_wsa_fn<F>(handle: usize, fguid: GUID) -> IoResult<Option<F>> {
     let mut fptr = None;
     let mut returned = 0;
@@ -58,7 +49,7 @@ pub unsafe fn get_wsa_fn<F>(handle: usize, fguid: GUID) -> IoResult<Option<F>> {
         std::ptr::addr_of!(fguid).cast(),
         std::mem::size_of_val(&fguid) as _,
         std::ptr::addr_of_mut!(fptr).cast(),
-        std::mem::size_of::<usize>() as _,
+        std::mem::size_of::<F>() as _,
         &mut returned,
         null_mut(),
         None,

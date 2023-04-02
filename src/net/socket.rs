@@ -9,11 +9,13 @@ use once_cell::sync::OnceCell as OnceLock;
 use std::{
     net::{Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6},
     os::windows::prelude::{AsRawSocket, AsSocket, FromRawSocket, OwnedSocket},
+    ptr::NonNull,
 };
 use windows_sys::Win32::Networking::WinSock::{
     bind, connect, getpeername, getsockname, listen, shutdown, socket, WSACleanup, WSAStartup,
     ADDRESS_FAMILY, AF_INET, AF_INET6, AF_UNIX, INVALID_SOCKET, IPPROTO, SD_BOTH, SD_RECEIVE,
-    SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE, SOCKADDR_UN, SOCKET, WSADATA,
+    SD_SEND, SOCKADDR, SOCKADDR_IN, SOCKADDR_IN6, SOCKADDR_STORAGE, SOCKADDR_UN, SOCKET,
+    WINSOCK_SOCKET_TYPE, WSADATA,
 };
 
 struct WSAInit;
@@ -45,10 +47,10 @@ pub struct Socket {
 }
 
 impl Socket {
-    pub fn new(addr: ADDRESS_FAMILY, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
+    pub fn new(addr: ADDRESS_FAMILY, ty: WINSOCK_SOCKET_TYPE, protocol: IPPROTO) -> IoResult<Self> {
         WSA_INIT.get_or_init(WSAInit::init);
 
-        let handle = unsafe { socket(addr as _, ty as _, protocol) };
+        let handle = unsafe { socket(addr as _, ty, protocol) };
         if handle != INVALID_SOCKET {
             let socket = Self {
                 handle: unsafe { OwnedSocket::from_raw_socket(handle as _) },
@@ -64,8 +66,8 @@ impl Socket {
         IO_PORT.with(|port| port.attach(self.as_raw_socket() as _))
     }
 
-    pub fn bind(addr: impl SockAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
-        let socket = Self::new(addr.domain() as _, ty as _, protocol)?;
+    pub fn bind(addr: impl SockAddr, ty: WINSOCK_SOCKET_TYPE, protocol: IPPROTO) -> IoResult<Self> {
+        let socket = Self::new(addr.domain(), ty, protocol)?;
         let res =
             unsafe { addr.with_native(|addr, len| bind(socket.as_raw_socket() as _, addr, len)) };
         if res == 0 {
@@ -75,7 +77,11 @@ impl Socket {
         }
     }
 
-    pub fn bind_any_like(addr: SocketAddr, ty: u16, protocol: IPPROTO) -> IoResult<Self> {
+    pub fn bind_any_like(
+        addr: SocketAddr,
+        ty: WINSOCK_SOCKET_TYPE,
+        protocol: IPPROTO,
+    ) -> IoResult<Self> {
         let new_addr: SocketAddr = match addr {
             SocketAddr::V4(addr) => SocketAddrV4::new(*addr.ip(), 0).into(),
             SocketAddr::V6(addr) => SocketAddrV6::new(*addr.ip(), 0, 0, 0).into(),
@@ -122,7 +128,9 @@ impl Socket {
             )
         };
         if res == 0 {
-            Ok(unsafe { A::try_from_native(name.as_ptr() as _, namelen as _).unwrap() })
+            Ok(unsafe {
+                A::try_from_native(NonNull::new_unchecked(name.as_ptr() as _), namelen).unwrap()
+            })
         } else {
             Err(IoError::last_os_error())
         }
@@ -138,11 +146,11 @@ impl Socket {
 
     pub async fn accept<A: SockAddr + 'static>(
         &self,
-        ty: u16,
+        ty: WINSOCK_SOCKET_TYPE,
         protocol: IPPROTO,
     ) -> IoResult<(Socket, A)> {
         let local_addr: A = self.local_addr()?;
-        let accept_socket = Socket::new(local_addr.domain() as _, ty, protocol)?;
+        let accept_socket = Socket::new(local_addr.domain(), ty, protocol)?;
         let (res, accept_socket) =
             IocpFuture::new(self.as_socket(), Accept::new(accept_socket.handle)).await;
         let addr = res?;
@@ -160,7 +168,7 @@ impl Socket {
             Shutdown::Read => SD_RECEIVE,
             Shutdown::Both => SD_BOTH,
         };
-        let res = unsafe { shutdown(self.handle.as_raw_socket() as _, how as _) };
+        let res = unsafe { shutdown(self.handle.as_raw_socket() as _, how) };
         if res == 0 {
             Ok(())
         } else {
@@ -217,33 +225,33 @@ impl_socket!(Socket, handle);
 pub const MAX_ADDR_SIZE: usize = std::mem::size_of::<SOCKADDR_STORAGE>();
 
 pub trait SockAddr: Sized + Unpin {
-    fn domain(&self) -> u16;
+    fn domain(&self) -> ADDRESS_FAMILY;
 
-    unsafe fn try_from_native(addr: *const SOCKADDR, len: i32) -> Option<Self>;
+    unsafe fn try_from_native(addr: NonNull<SOCKADDR>, len: i32) -> Option<Self>;
 
     unsafe fn with_native<T>(&self, f: impl FnOnce(*const SOCKADDR, i32) -> T) -> T;
 }
 
 impl SockAddr for SocketAddr {
-    fn domain(&self) -> u16 {
+    fn domain(&self) -> ADDRESS_FAMILY {
         match self {
-            Self::V4(_) => AF_INET as _,
-            Self::V6(_) => AF_INET6 as _,
+            Self::V4(_) => AF_INET,
+            Self::V6(_) => AF_INET6,
         }
     }
 
-    unsafe fn try_from_native(addr: *const SOCKADDR, _len: i32) -> Option<Self> {
-        let addr_ref = addr.as_ref().unwrap();
+    unsafe fn try_from_native(addr: NonNull<SOCKADDR>, _len: i32) -> Option<Self> {
+        let addr_ref = addr.as_ref();
         match addr_ref.sa_family {
             AF_INET => {
-                let addr = addr.cast::<SOCKADDR_IN>().as_ref().unwrap();
+                let addr = addr.cast::<SOCKADDR_IN>().as_ref();
                 Some(SocketAddr::V4(SocketAddrV4::new(
                     Ipv4Addr::from(addr.sin_addr.S_un.S_addr.to_ne_bytes()),
                     addr.sin_port,
                 )))
             }
             AF_INET6 => {
-                let addr = addr.cast::<SOCKADDR_IN6>().as_ref().unwrap();
+                let addr = addr.cast::<SOCKADDR_IN6>().as_ref();
                 Some(SocketAddr::V6(SocketAddrV6::new(
                     Ipv6Addr::from(addr.sin6_addr.u.Byte),
                     addr.sin6_port,
@@ -259,7 +267,7 @@ impl SockAddr for SocketAddr {
         match self {
             SocketAddr::V4(addr) => {
                 let native_addr = SOCKADDR_IN {
-                    sin_family: AF_INET as _,
+                    sin_family: AF_INET,
                     sin_port: addr.port(),
                     sin_addr: std::mem::transmute(u32::from_ne_bytes(addr.ip().octets())),
                     sin_zero: std::mem::zeroed(),
@@ -271,7 +279,7 @@ impl SockAddr for SocketAddr {
             }
             SocketAddr::V6(addr) => {
                 let native_addr = SOCKADDR_IN6 {
-                    sin6_family: AF_INET6 as _,
+                    sin6_family: AF_INET6,
                     sin6_port: addr.port(),
                     sin6_flowinfo: 0,
                     sin6_addr: std::mem::transmute(addr.ip().octets()),
@@ -287,14 +295,14 @@ impl SockAddr for SocketAddr {
 }
 
 impl SockAddr for UnixSocketAddr {
-    fn domain(&self) -> u16 {
+    fn domain(&self) -> ADDRESS_FAMILY {
         AF_UNIX
     }
 
-    unsafe fn try_from_native(addr: *const SOCKADDR, len: i32) -> Option<Self> {
-        let addr_ref = addr.as_ref().unwrap();
+    unsafe fn try_from_native(addr: NonNull<SOCKADDR>, len: i32) -> Option<Self> {
+        let addr_ref = addr.as_ref();
         if addr_ref.sa_family == AF_UNIX {
-            let addr = addr.cast::<SOCKADDR_UN>().as_ref().unwrap();
+            let addr = addr.cast::<SOCKADDR_UN>().as_ref();
             let len = (len - 2) as usize;
             Some(UnixSocketAddr {
                 path: addr.sun_path,
@@ -310,9 +318,6 @@ impl SockAddr for UnixSocketAddr {
             sun_family: AF_UNIX,
             sun_path: self.path,
         };
-        f(
-            std::ptr::addr_of!(addr).cast::<SOCKADDR>(),
-            (self.len + 2) as _,
-        )
+        f(std::ptr::addr_of!(addr) as _, (self.len + 2) as _)
     }
 }

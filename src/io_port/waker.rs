@@ -100,6 +100,6 @@ impl<Op: IocpOperation> WakerOp for IoWakerOp<Op> {
     }
 
     unsafe fn op_ptr(&mut self) -> *mut () {
-        &self.op as *const Op as *mut Op as *mut ()
+        &mut self.op as *mut Op as *mut ()
     }
 }

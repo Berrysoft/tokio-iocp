@@ -21,7 +21,7 @@ impl<A: SockAddr> IocpOperation for Connect<A> {
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
         let connect_fn = CONNECT_EX.get_or_try_init(|| {
-            let fguid = guid_from_u128(0x25a207b9_ddf3_4660_8ee9_76e58c74063e);
+            let fguid = GUID::from_u128(0x25a207b9_ddf3_4660_8ee9_76e58c74063e);
             get_wsa_fn(handle, fguid)
         })?;
         let mut sent = 0;

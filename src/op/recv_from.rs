@@ -1,5 +1,5 @@
 use crate::{net::*, op::*};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ptr::NonNull};
 use windows_sys::Win32::Networking::WinSock::WSARecvFrom;
 
 pub struct RecvFrom<T: WithWsaBufMut, A: SockAddr> {
@@ -49,9 +49,13 @@ impl<T: WithWsaBufMut, A: SockAddr> IocpOperation for RecvFrom<T, A> {
 
     fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer> {
         let out = res.map(|res| {
-            let addr =
-                unsafe { A::try_from_native(self.addr_buffer.as_ptr() as _, self.addr_size as _) }
-                    .unwrap();
+            let addr = unsafe {
+                A::try_from_native(
+                    NonNull::new_unchecked(self.addr_buffer.as_ptr() as _),
+                    self.addr_size as _,
+                )
+            }
+            .unwrap();
             (res, addr)
         });
         (out, self.buffer.take_buf())

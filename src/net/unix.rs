@@ -270,7 +270,7 @@ impl UnixStream {
     /// [`UnixListener`] or equivalent listening on the corresponding Unix domain socket
     /// to successfully connect and return a `UnixStream`.
     pub fn connect_addr(addr: UnixSocketAddr) -> IoResult<Self> {
-        let socket = Socket::new(AF_UNIX as _, SOCK_STREAM, IPPROTO_HOPOPTS)?;
+        let socket = Socket::new(AF_UNIX, SOCK_STREAM, IPPROTO_HOPOPTS)?;
         socket.connect(addr)?;
         let unix_stream = UnixStream { inner: socket };
         Ok(unix_stream)

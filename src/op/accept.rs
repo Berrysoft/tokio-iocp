@@ -3,7 +3,7 @@ use once_cell::sync::OnceCell as OnceLock;
 use std::{
     marker::PhantomData,
     os::windows::prelude::{AsRawSocket, OwnedSocket},
-    ptr::null_mut,
+    ptr::{null_mut, NonNull},
 };
 use windows_sys::Win32::Networking::WinSock::{LPFN_ACCEPTEX, LPFN_GETACCEPTEXSOCKADDRS};
 
@@ -32,11 +32,11 @@ impl<A: SockAddr> IocpOperation for Accept<A> {
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
         let accept_fn = ACCEPT_EX.get_or_try_init(|| {
-            let fguid = guid_from_u128(0xb5367df1_cbac_11cf_95ca_00805f48a192);
+            let fguid = GUID::from_u128(0xb5367df1_cbac_11cf_95ca_00805f48a192);
             get_wsa_fn(handle, fguid)
         })?;
         let _get_addrs_fn = GET_ADDRS.get_or_try_init(|| {
-            let fguid = guid_from_u128(0xb5367df2_cbac_11cf_95ca_00805f48a192);
+            let fguid = GUID::from_u128(0xb5367df2_cbac_11cf_95ca_00805f48a192);
             get_wsa_fn(handle, fguid)
         })?;
         let mut received = 0;
@@ -71,7 +71,7 @@ impl<A: SockAddr> IocpOperation for Accept<A> {
                 &mut remote_addr,
                 &mut remote_addr_len,
             );
-            A::try_from_native(remote_addr, remote_addr_len).unwrap()
+            A::try_from_native(NonNull::new(remote_addr).unwrap(), remote_addr_len).unwrap()
         });
         (out, self.accept_handle.take().unwrap())
     }

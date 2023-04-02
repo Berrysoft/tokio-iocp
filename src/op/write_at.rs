@@ -21,7 +21,8 @@ impl<T: IoBuf> IocpOperation for WriteAt<T> {
 
     unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
         if let Some(overlapped) = overlapped_ptr.as_mut() {
-            overlapped.Anonymous.Anonymous.Offset = self.pos as _;
+            overlapped.Anonymous.Anonymous.Offset = (self.pos & 0xFFFFFFFF) as _;
+            overlapped.Anonymous.Anonymous.OffsetHigh = (self.pos >> 32) as _;
         }
         let res = self.buffer.with_buf(|ptr, len| {
             let mut written = 0;
