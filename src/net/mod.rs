@@ -21,6 +21,8 @@ pub use udp::*;
 mod unix;
 pub use unix::*;
 
+pub mod named_pipe;
+
 use crate::{IoError, IoResult};
 use std::{
     future::Future,

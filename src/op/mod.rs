@@ -1,5 +1,6 @@
 pub mod accept;
 pub mod connect;
+pub mod connect_named_pipe;
 pub mod read_at;
 pub mod recv;
 pub mod recv_from;
