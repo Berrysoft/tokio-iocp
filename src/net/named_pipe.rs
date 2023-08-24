@@ -1,9 +1,11 @@
 //! [Windows named pipes](https://learn.microsoft.com/en-us/windows/win32/ipc/named-pipes).
+//!
+//! The infrastructure of the code comes from [`tokio::net::windows`].
 
 use crate::{
     buf::*,
     io_port::*,
-    op::{connect_named_pipe::ConnectNamedPipe, read_at::ReadAt, write_at::WriteAt},
+    op::{connect_named_pipe::*, read_at::*, write_at::*},
     *,
 };
 use std::{
@@ -101,7 +103,7 @@ pub struct NamedPipeServer {
 }
 
 impl NamedPipeServer {
-    /// Constructs a new named pipe server from the specified raw handle.
+    /// Constructs a new named pipe server from the specified handle.
     ///
     /// This function will consume ownership of the handle given, passing
     /// responsibility for closing the handle to the returned object.
@@ -291,7 +293,7 @@ pub struct NamedPipeClient {
 }
 
 impl NamedPipeClient {
-    /// Constructs a new named pipe client from the specified raw handle.
+    /// Constructs a new named pipe client from the specified handle.
     ///
     /// This function will consume ownership of the handle given, passing
     /// responsibility for closing the handle to the returned object.
