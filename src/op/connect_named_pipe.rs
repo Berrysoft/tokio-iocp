@@ -14,7 +14,11 @@ impl IocpOperation for ConnectNamedPipe {
 
     type Buffer = ();
 
-    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+    unsafe fn operate(
+        &mut self,
+        handle: usize,
+        overlapped_ptr: *mut OVERLAPPED,
+    ) -> Poll<IoResult<()>> {
         let res = ConnectNamedPipe(handle as _, overlapped_ptr);
         win32_result(res)
     }

@@ -19,7 +19,11 @@ impl<T: IoBuf> IocpOperation for WriteAt<T> {
     type Output = usize;
     type Buffer = T;
 
-    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+    unsafe fn operate(
+        &mut self,
+        handle: usize,
+        overlapped_ptr: *mut OVERLAPPED,
+    ) -> Poll<IoResult<()>> {
         if let Some(overlapped) = overlapped_ptr.as_mut() {
             overlapped.Anonymous.Anonymous.Offset = (self.pos & 0xFFFFFFFF) as _;
             overlapped.Anonymous.Anonymous.OffsetHigh = (self.pos >> 32) as _;

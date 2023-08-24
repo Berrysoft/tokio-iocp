@@ -30,7 +30,8 @@ criterion = { version = "0.5", optional = true }
 widestring = "1"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["fs", "io-util", "macros", "net"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "time"] }
+windows-sys = { version = "0.48", features = ["Win32_Security_Authorization"] }
 futures-util = "0.3"
 tempfile = "3.5"
 criterion = { version = "0.5", features = ["async_tokio"] }

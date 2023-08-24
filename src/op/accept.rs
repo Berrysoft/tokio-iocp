@@ -33,7 +33,11 @@ impl<A: SockAddr> IocpOperation for Accept<A> {
     type Output = A;
     type Buffer = OwnedSocket;
 
-    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+    unsafe fn operate(
+        &mut self,
+        handle: usize,
+        overlapped_ptr: *mut OVERLAPPED,
+    ) -> Poll<IoResult<()>> {
         let accept_fn = ACCEPT_EX.get_or_try_init(|| get_wsa_fn(handle, WSAID_ACCEPTEX))?;
         let _get_addrs_fn =
             GET_ADDRS.get_or_try_init(|| get_wsa_fn(handle, WSAID_GETACCEPTEXSOCKADDRS))?;

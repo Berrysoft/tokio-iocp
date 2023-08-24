@@ -19,7 +19,11 @@ impl<T: WithWsaBuf, A: SockAddr> IocpOperation for SendTo<T, A> {
     type Output = usize;
     type Buffer = T::Buffer;
 
-    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+    unsafe fn operate(
+        &mut self,
+        handle: usize,
+        overlapped_ptr: *mut OVERLAPPED,
+    ) -> Poll<IoResult<()>> {
         let res = self.buffer.with_wsa_buf(|ptr, len| {
             let mut sent = 0;
             self.addr.with_native(|addr, addr_len| {

@@ -33,6 +33,8 @@ use windows_sys::Win32::{
     },
 };
 
+pub use tokio::net::windows::named_pipe::{PipeEnd, PipeMode};
+
 /// A [Windows named pipe] server.
 ///
 /// Accepting client connections involves creating a server with
@@ -50,11 +52,11 @@ use windows_sys::Win32::{
 ///
 /// ```no_run
 /// use std::io;
-/// use tokio::net::windows::named_pipe::ServerOptions;
+/// use tokio_iocp::net::named_pipe::ServerOptions;
 ///
 /// const PIPE_NAME: &str = r"\\.\pipe\named-pipe-idiomatic-server";
 ///
-/// # #[tokio::main] async fn main() -> std::io::Result<()> {
+/// # fn main() -> std::io::Result<()> {
 /// // The first server needs to be constructed early so that clients can
 /// // be correctly connected. Otherwise calling .wait will cause the client to
 /// // error.
@@ -66,7 +68,7 @@ use windows_sys::Win32::{
 ///     .create(PIPE_NAME)?;
 ///
 /// // Spawn the server loop.
-/// let server = tokio::spawn(async move {
+/// let server = tokio_iocp::start(async move {
 ///     loop {
 ///         // Wait for a client to connect.
 ///         let connected = server.connect().await?;
@@ -109,14 +111,6 @@ impl NamedPipeServer {
     /// are wrapping. Usage of this function could accidentally allow violating
     /// this contract which can cause memory unsafety in code that relies on it
     /// being true.
-    ///
-    /// # Errors
-    ///
-    /// This errors if called outside of a [Tokio Runtime], or in a runtime that
-    /// has not [enabled I/O], or if any OS-specific I/O errors occur.
-    ///
-    /// [Tokio Runtime]: crate::runtime::Runtime
-    /// [enabled I/O]: crate::runtime::Builder::enable_io
     pub fn from_handle(handle: OwnedHandle) -> IoResult<Self> {
         IO_PORT.with(|port| port.attach(handle.as_raw_handle() as _))?;
         Ok(Self { handle })
@@ -126,11 +120,11 @@ impl NamedPipeServer {
     /// with.
     ///
     /// ```no_run
-    /// use tokio::net::windows::named_pipe::{PipeEnd, PipeMode, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{PipeEnd, PipeMode, ServerOptions};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-server-info";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let server = ServerOptions::new()
     ///     .pipe_mode(PipeMode::Message)
     ///     .max_instances(5)
@@ -141,7 +135,7 @@ impl NamedPipeServer {
     /// assert_eq!(server_info.end, PipeEnd::Server);
     /// assert_eq!(server_info.mode, PipeMode::Message);
     /// assert_eq!(server_info.max_instances, 5);
-    /// # Ok(()) }
+    /// # tokio_iocp::IoResult::Ok(()) });
     /// ```
     pub fn info(&self) -> IoResult<PipeInfo> {
         // Safety: we're ensuring the lifetime of the named pipe.
@@ -165,18 +159,18 @@ impl NamedPipeServer {
     /// # Example
     ///
     /// ```no_run
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\mynamedpipe";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let pipe = ServerOptions::new().create(PIPE_NAME)?;
     ///
     /// // Wait for a client to connect.
     /// pipe.connect().await?;
     ///
     /// // Use the connected client...
-    /// # Ok(()) }
+    /// # tokio_iocp::IoResult::Ok(()) });
     /// ```
     pub async fn connect(&self) -> IoResult<()> {
         IocpFuture::new(self.as_handle(), ConnectNamedPipe::new())
@@ -188,44 +182,48 @@ impl NamedPipeServer {
     /// process.
     ///
     /// ```
-    /// use tokio::io::AsyncWriteExt;
-    /// use tokio::net::windows::named_pipe::{ClientOptions, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, ServerOptions};
     /// use windows_sys::Win32::Foundation::ERROR_PIPE_NOT_CONNECTED;
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-disconnect";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let server = ServerOptions::new()
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// let mut client = ClientOptions::new()
-    ///     .open(PIPE_NAME)?;
+    ///     .open(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// // Wait for a client to become connected.
-    /// server.connect().await?;
+    /// server.connect().await.unwrap();
     ///
     /// // Forcibly disconnect the client.
-    /// server.disconnect()?;
+    /// server.disconnect().unwrap();
     ///
     /// // Write fails with an OS-specific error after client has been
     /// // disconnected.
-    /// let e = client.write(b"ping").await.unwrap_err();
+    /// let e = client.write("ping").await.0.unwrap_err();
     /// assert_eq!(e.raw_os_error(), Some(ERROR_PIPE_NOT_CONNECTED as i32));
-    /// # Ok(()) }
+    /// # })
     /// ```
     pub fn disconnect(&self) -> IoResult<()> {
         let res = unsafe { DisconnectNamedPipe(self.as_raw_handle() as _) };
         if res == 0 {
-            Ok(())
-        } else {
             Err(IoError::last_os_error())
+        } else {
+            Ok(())
         }
     }
 
+    /// Read some bytes from the pipe into the specified
+    /// buffer, returning how many bytes were read.
     pub async fn read<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
         IocpFuture::new(self.as_handle(), ReadAt::new(buffer, 0)).await
     }
 
+    /// Write a buffer into the pipe, returning how many bytes were written.
     pub async fn write<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
         IocpFuture::new(self.as_handle(), WriteAt::new(buffer, 0)).await
     }
@@ -264,13 +262,13 @@ impl AsHandle for NamedPipeServer {
 ///
 /// ```no_run
 /// use std::time::Duration;
-/// use tokio::net::windows::named_pipe::ClientOptions;
+/// use tokio_iocp::net::named_pipe::ClientOptions;
 /// use tokio::time;
 /// use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
 ///
 /// const PIPE_NAME: &str = r"\\.\pipe\named-pipe-idiomatic-client";
 ///
-/// # #[tokio::main] async fn main() -> std::io::Result<()> {
+/// # tokio_iocp::start(async move {
 /// let client = loop {
 ///     match ClientOptions::new().open(PIPE_NAME) {
 ///         Ok(client) => break client,
@@ -282,7 +280,7 @@ impl AsHandle for NamedPipeServer {
 /// };
 ///
 /// /* use the connected client */
-/// # Ok(()) }
+/// # Ok(()) });
 /// ```
 ///
 /// [`ERROR_PIPE_BUSY`]: https://docs.rs/windows-sys/latest/windows_sys/Win32/Foundation/constant.ERROR_PIPE_BUSY.html
@@ -303,14 +301,6 @@ impl NamedPipeClient {
     /// are wrapping. Usage of this function could accidentally allow violating
     /// this contract which can cause memory unsafety in code that relies on it
     /// being true.
-    ///
-    /// # Errors
-    ///
-    /// This errors if called outside of a [Tokio Runtime], or in a runtime that
-    /// has not [enabled I/O], or if any OS-specific I/O errors occur.
-    ///
-    /// [Tokio Runtime]: crate::runtime::Runtime
-    /// [enabled I/O]: crate::runtime::Builder::enable_io
     pub fn from_handle(handle: OwnedHandle) -> IoResult<Self> {
         IO_PORT.with(|port| port.attach(handle.as_raw_handle() as _))?;
         Ok(Self { handle })
@@ -320,11 +310,11 @@ impl NamedPipeClient {
     /// with.
     ///
     /// ```no_run
-    /// use tokio::net::windows::named_pipe::{ClientOptions, PipeEnd, PipeMode};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, PipeEnd, PipeMode};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-client-info";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let client = ClientOptions::new()
     ///     .open(PIPE_NAME)?;
     ///
@@ -333,17 +323,20 @@ impl NamedPipeClient {
     /// assert_eq!(client_info.end, PipeEnd::Client);
     /// assert_eq!(client_info.mode, PipeMode::Message);
     /// assert_eq!(client_info.max_instances, 5);
-    /// # Ok(()) }
+    /// # tokio_iocp::IoResult::Ok(()) });
     /// ```
     pub fn info(&self) -> IoResult<PipeInfo> {
         // Safety: we're ensuring the lifetime of the named pipe.
         unsafe { named_pipe_info(self.as_raw_handle()) }
     }
 
+    /// Read some bytes from the pipe into the specified
+    /// buffer, returning how many bytes were read.
     pub async fn read<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
         IocpFuture::new(self.as_handle(), ReadAt::new(buffer, 0)).await
     }
 
+    /// Write a buffer into the pipe, returning how many bytes were written.
     pub async fn write<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
         IocpFuture::new(self.as_handle(), WriteAt::new(buffer, 0)).await
     }
@@ -395,13 +388,13 @@ impl ServerOptions {
     /// Creates a new named pipe builder with the default settings.
     ///
     /// ```
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-new";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
-    /// let server = ServerOptions::new().create(PIPE_NAME)?;
-    /// # Ok(()) }
+    /// # tokio_iocp::start(async move {
+    /// let server = ServerOptions::new().create(PIPE_NAME).unwrap();
+    /// # })
     /// ```
     pub fn new() -> ServerOptions {
         ServerOptions {
@@ -447,21 +440,22 @@ impl ServerOptions {
     ///
     /// ```
     /// use std::io;
-    /// use tokio::net::windows::named_pipe::{ClientOptions, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, ServerOptions};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-access-inbound-err1";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let _server = ServerOptions::new()
     ///     .access_inbound(false)
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// let e = ClientOptions::new()
     ///     .open(PIPE_NAME)
     ///     .unwrap_err();
     ///
     /// assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// Disabling writing allows a client to connect, but errors with
@@ -469,25 +463,26 @@ impl ServerOptions {
     ///
     /// ```
     /// use std::io;
-    /// use tokio::io::AsyncWriteExt;
-    /// use tokio::net::windows::named_pipe::{ClientOptions, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, ServerOptions};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-access-inbound-err2";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let server = ServerOptions::new()
     ///     .access_inbound(false)
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// let mut client = ClientOptions::new()
     ///     .write(false)
-    ///     .open(PIPE_NAME)?;
+    ///     .open(PIPE_NAME)
+    ///     .unwrap();
     ///
-    /// server.connect().await?;
+    /// server.connect().await.unwrap();
     ///
-    /// let e = client.write(b"ping").await.unwrap_err();
+    /// let e = client.write("ping").await.0.unwrap_err();
     /// assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// # Examples
@@ -498,31 +493,35 @@ impl ServerOptions {
     /// ```
     /// use std::io;
     /// use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    /// use tokio::net::windows::named_pipe::{ClientOptions, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, ServerOptions};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-access-inbound";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let mut server = ServerOptions::new()
     ///     .access_inbound(false)
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// let mut client = ClientOptions::new()
     ///     .write(false)
-    ///     .open(PIPE_NAME)?;
+    ///     .open(PIPE_NAME)
+    ///     .unwrap();
     ///
-    /// server.connect().await?;
+    /// server.connect().await.unwrap();
     ///
-    /// let write = server.write_all(b"ping");
+    /// let write = server.write("ping");
     ///
-    /// let mut buf = [0u8; 4];
-    /// let read = client.read_exact(&mut buf);
+    /// let mut buf = Vec::with_capacity(4);
+    /// let read = client.read(buf);
     ///
-    /// let ((), read) = tokio::try_join!(write, read)?;
+    /// let ((write, _), (read, buf)) = tokio::join!(write, read);
+    /// write.unwrap();
+    /// let read = read.unwrap();
     ///
     /// assert_eq!(read, 4);
     /// assert_eq!(&buf[..], b"ping");
-    /// # Ok(()) }
+    /// # })
     /// ```
     pub fn access_inbound(&mut self, allowed: bool) -> &mut Self {
         self.access_inbound = allowed;
@@ -543,21 +542,22 @@ impl ServerOptions {
     ///
     /// ```
     /// use std::io;
-    /// use tokio::net::windows::named_pipe::{ClientOptions, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, ServerOptions};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-access-outbound-err1";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let server = ServerOptions::new()
     ///     .access_outbound(false)
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// let e = ClientOptions::new()
     ///     .open(PIPE_NAME)
     ///     .unwrap_err();
     ///
     /// assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// Disabling reading allows a client to connect, but attempting to read
@@ -566,25 +566,27 @@ impl ServerOptions {
     /// ```
     /// use std::io;
     /// use tokio::io::AsyncReadExt;
-    /// use tokio::net::windows::named_pipe::{ClientOptions, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, ServerOptions};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-access-outbound-err2";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let server = ServerOptions::new()
     ///     .access_outbound(false)
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// let mut client = ClientOptions::new()
     ///     .read(false)
-    ///     .open(PIPE_NAME)?;
+    ///     .open(PIPE_NAME)
+    ///     .unwrap();
     ///
-    /// server.connect().await?;
+    /// server.connect().await.unwrap();
     ///
-    /// let mut buf = [0u8; 4];
-    /// let e = client.read(&mut buf).await.unwrap_err();
+    /// let mut buf = Vec::with_capacity(4);
+    /// let e = client.read(buf).await.0.unwrap_err();
     /// assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// # Examples
@@ -594,33 +596,37 @@ impl ServerOptions {
     ///
     /// ```
     /// use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    /// use tokio::net::windows::named_pipe::{ClientOptions, ServerOptions};
+    /// use tokio_iocp::net::named_pipe::{ClientOptions, ServerOptions};
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-access-outbound";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let mut server = ServerOptions::new()
     ///     .access_outbound(false)
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// let mut client = ClientOptions::new()
     ///     .read(false)
-    ///     .open(PIPE_NAME)?;
+    ///     .open(PIPE_NAME)
+    ///     .unwrap();
     ///
-    /// server.connect().await?;
+    /// server.connect().await.unwrap();
     ///
-    /// let write = client.write_all(b"ping");
+    /// let write = client.write("ping");
     ///
-    /// let mut buf = [0u8; 4];
-    /// let read = server.read_exact(&mut buf);
+    /// let mut buf = Vec::with_capacity(4);
+    /// let read = server.read(buf);
     ///
-    /// let ((), read) = tokio::try_join!(write, read)?;
+    /// let ((write, _), (read, buf)) = tokio::join!(write, read);
+    /// write.unwrap();
+    /// let read = read.unwrap();
     ///
     /// println!("done reading and writing");
     ///
     /// assert_eq!(read, 4);
     /// assert_eq!(&buf[..], b"ping");
-    /// # Ok(()) }
+    /// # })
     /// ```
     pub fn access_outbound(&mut self, allowed: bool) -> &mut Self {
         self.access_outbound = allowed;
@@ -647,14 +653,15 @@ impl ServerOptions {
     ///
     /// ```
     /// use std::io;
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-first-instance-error";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let server1 = ServerOptions::new()
     ///     .first_pipe_instance(true)
-    ///     .create(PIPE_NAME)?;
+    ///     .create(PIPE_NAME)
+    ///     .unwrap();
     ///
     /// // Second server errs, since it's not the first instance.
     /// let e = ServerOptions::new()
@@ -663,29 +670,29 @@ impl ServerOptions {
     ///     .unwrap_err();
     ///
     /// assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// # Examples
     ///
     /// ```
     /// use std::io;
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-first-instance";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let mut builder = ServerOptions::new();
     /// builder.first_pipe_instance(true);
     ///
-    /// let server = builder.create(PIPE_NAME)?;
+    /// let server = builder.create(PIPE_NAME).unwrap();
     /// let e = builder.create(PIPE_NAME).unwrap_err();
     /// assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
     /// drop(server);
     ///
     /// // OK: since, we've closed the other instance.
-    /// let _server2 = builder.create(PIPE_NAME)?;
-    /// # Ok(()) }
+    /// let _server2 = builder.create(PIPE_NAME).unwrap();
+    /// # })
     /// ```
     ///
     /// [`create`]: ServerOptions::create
@@ -704,7 +711,7 @@ impl ServerOptions {
     /// ```
     /// use std::{io, os::windows::prelude::AsRawHandle, ptr};
     //
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     /// use windows_sys::{
     ///     Win32::Foundation::ERROR_SUCCESS,
     ///     Win32::Security::DACL_SECURITY_INFORMATION,
@@ -713,10 +720,10 @@ impl ServerOptions {
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\write_dac_pipe";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let mut pipe_template = ServerOptions::new();
     /// pipe_template.write_dac(true);
-    /// let pipe = pipe_template.create(PIPE_NAME)?;
+    /// let pipe = pipe_template.create(PIPE_NAME).unwrap();
     ///
     /// unsafe {
     ///     assert_eq!(
@@ -733,13 +740,13 @@ impl ServerOptions {
     ///     );
     /// }
     ///
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// ```
     /// use std::{io, os::windows::prelude::AsRawHandle, ptr};
     //
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     /// use windows_sys::{
     ///     Win32::Foundation::ERROR_ACCESS_DENIED,
     ///     Win32::Security::DACL_SECURITY_INFORMATION,
@@ -748,10 +755,10 @@ impl ServerOptions {
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\write_dac_pipe_fail";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let mut pipe_template = ServerOptions::new();
     /// pipe_template.write_dac(false);
-    /// let pipe = pipe_template.create(PIPE_NAME)?;
+    /// let pipe = pipe_template.create(PIPE_NAME).unwrap();
     ///
     /// unsafe {
     ///     assert_eq!(
@@ -768,7 +775,7 @@ impl ServerOptions {
     ///     );
     /// }
     ///
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// [`WRITE_DAC`]: https://docs.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea
@@ -825,19 +832,19 @@ impl ServerOptions {
     ///
     /// ```
     /// use std::io;
-    /// use tokio::net::windows::named_pipe::{ServerOptions, ClientOptions};
+    /// use tokio_iocp::net::named_pipe::{ServerOptions, ClientOptions};
     /// use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-max-instances";
     ///
-    /// # #[tokio::main] async fn main() -> io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let mut server = ServerOptions::new();
     /// server.max_instances(2);
     ///
-    /// let s1 = server.create(PIPE_NAME)?;
+    /// let s1 = server.create(PIPE_NAME).unwrap();
     /// let c1 = ClientOptions::new().open(PIPE_NAME);
     ///
-    /// let s2 = server.create(PIPE_NAME)?;
+    /// let s2 = server.create(PIPE_NAME).unwrap();
     /// let c2 = ClientOptions::new().open(PIPE_NAME);
     ///
     /// // Too many servers!
@@ -847,7 +854,7 @@ impl ServerOptions {
     /// // Still too many servers even if we specify a higher value!
     /// let e = server.max_instances(100).create(PIPE_NAME).unwrap_err();
     /// assert_eq!(e.raw_os_error(), Some(ERROR_PIPE_BUSY as i32));
-    /// # Ok(()) }
+    /// # })
     /// ```
     ///
     /// # Panics
@@ -856,11 +863,11 @@ impl ServerOptions {
     /// you do not wish to set an instance limit, leave it unspecified.
     ///
     /// ```should_panic
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let builder = ServerOptions::new().max_instances(255);
-    /// # Ok(()) }
+    /// # })
     /// ```
     #[track_caller]
     pub fn max_instances(&mut self, instances: usize) -> &mut Self {
@@ -906,13 +913,13 @@ impl ServerOptions {
     /// # Examples
     ///
     /// ```
-    /// use tokio::net::windows::named_pipe::ServerOptions;
+    /// use tokio_iocp::net::named_pipe::ServerOptions;
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-create";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
-    /// let server = ServerOptions::new().create(PIPE_NAME)?;
-    /// # Ok(()) }
+    /// # tokio_iocp::start(async move {
+    /// let server = ServerOptions::new().create(PIPE_NAME).unwrap();
+    /// # })
     /// ```
     pub fn create(&self, addr: impl AsRef<OsStr>) -> IoResult<NamedPipeServer> {
         // Safety: We're calling create_with_security_attributes_raw w/ a null
@@ -1031,11 +1038,11 @@ impl ClientOptions {
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\tokio-named-pipe-client-new";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// // Server must be created in order for the client creation to succeed.
-    /// let server = ServerOptions::new().create(PIPE_NAME)?;
-    /// let client = ClientOptions::new().open(PIPE_NAME)?;
-    /// # Ok(()) }
+    /// let server = ServerOptions::new().create(PIPE_NAME).unwrap();
+    /// let client = ClientOptions::new().open(PIPE_NAME).unwrap();
+    /// # })
     /// ```
     pub fn new() -> Self {
         Self {
@@ -1140,7 +1147,7 @@ impl ClientOptions {
     ///
     /// const PIPE_NAME: &str = r"\\.\pipe\mynamedpipe";
     ///
-    /// # #[tokio::main] async fn main() -> std::io::Result<()> {
+    /// # tokio_iocp::start(async move {
     /// let client = loop {
     ///     match ClientOptions::new().open(PIPE_NAME) {
     ///         Ok(client) => break client,
@@ -1152,7 +1159,7 @@ impl ClientOptions {
     /// };
     ///
     /// // use the connected client.
-    /// # Ok(()) }
+    /// # Ok(()) });
     /// ```
     pub fn open(&self, addr: impl AsRef<OsStr>) -> IoResult<NamedPipeClient> {
         // Safety: We're calling open_with_security_attributes_raw w/ a null
@@ -1233,47 +1240,6 @@ impl Default for ClientOptions {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// The pipe mode of a named pipe.
-///
-/// Set through [`ServerOptions::pipe_mode`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PipeMode {
-    /// Data is written to the pipe as a stream of bytes. The pipe does not
-    /// distinguish bytes written during different write operations.
-    ///
-    /// Corresponds to [`PIPE_TYPE_BYTE`].
-    ///
-    /// [`PIPE_TYPE_BYTE`]: https://docs.rs/windows-sys/latest/windows_sys/Win32/System/Pipes/constant.PIPE_TYPE_BYTE.html
-    Byte,
-    /// Data is written to the pipe as a stream of messages. The pipe treats the
-    /// bytes written during each write operation as a message unit. Any reading
-    /// on a named pipe returns [`ERROR_MORE_DATA`] when a message is not read
-    /// completely.
-    ///
-    /// Corresponds to [`PIPE_TYPE_MESSAGE`].
-    ///
-    /// [`ERROR_MORE_DATA`]: https://docs.rs/windows-sys/latest/windows_sys/Win32/Foundation/constant.ERROR_MORE_DATA.html
-    /// [`PIPE_TYPE_MESSAGE`]: https://docs.rs/windows-sys/latest/windows_sys/Win32/System/Pipes/constant.PIPE_TYPE_MESSAGE.html
-    Message,
-}
-
-/// Indicates the end of a named pipe.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PipeEnd {
-    /// The named pipe refers to the client end of a named pipe instance.
-    ///
-    /// Corresponds to [`PIPE_CLIENT_END`].
-    ///
-    /// [`PIPE_CLIENT_END`]: https://docs.rs/windows-sys/latest/windows_sys/Win32/System/Pipes/constant.PIPE_CLIENT_END.html
-    Client,
-    /// The named pipe refers to the server end of a named pipe instance.
-    ///
-    /// Corresponds to [`PIPE_SERVER_END`].
-    ///
-    /// [`PIPE_SERVER_END`]: https://docs.rs/windows-sys/latest/windows_sys/Win32/System/Pipes/constant.PIPE_SERVER_END.html
-    Server,
 }
 
 /// Information about a named pipe.

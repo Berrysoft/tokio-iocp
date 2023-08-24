@@ -19,7 +19,11 @@ impl<A: SockAddr> IocpOperation for Connect<A> {
     type Output = ();
     type Buffer = ();
 
-    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+    unsafe fn operate(
+        &mut self,
+        handle: usize,
+        overlapped_ptr: *mut OVERLAPPED,
+    ) -> Poll<IoResult<()>> {
         let connect_fn = CONNECT_EX.get_or_try_init(|| get_wsa_fn(handle, WSAID_CONNECTEX))?;
         let mut sent = 0;
         let res = self.addr.with_native(|addr, len| {

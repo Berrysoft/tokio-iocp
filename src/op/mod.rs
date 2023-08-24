@@ -9,11 +9,14 @@ pub mod send_to;
 pub mod write_at;
 
 use crate::{buf::*, *};
-use std::ptr::null_mut;
+use std::{ptr::null_mut, task::Poll};
 use windows_sys::{
     core::GUID,
     Win32::{
-        Foundation::{GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING},
+        Foundation::{
+            GetLastError, ERROR_HANDLE_EOF, ERROR_IO_INCOMPLETE, ERROR_IO_PENDING, ERROR_NO_DATA,
+            ERROR_PIPE_CONNECTED,
+        },
         Networking::WinSock::{WSAIoctl, SIO_GET_EXTENSION_FUNCTION_POINTER, SOCKADDR},
         System::IO::OVERLAPPED,
     },
@@ -23,21 +26,28 @@ pub trait IocpOperation {
     type Output;
     type Buffer;
 
-    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()>;
+    unsafe fn operate(
+        &mut self,
+        handle: usize,
+        overlapped_ptr: *mut OVERLAPPED,
+    ) -> Poll<IoResult<()>>;
     fn set_buf_init(&mut self, len: usize);
 
     fn result(&mut self, res: IoResult<usize>) -> BufResult<Self::Output, Self::Buffer>;
 }
 
-pub unsafe fn win32_result(res: i32) -> IoResult<()> {
+pub unsafe fn win32_result(res: i32) -> Poll<IoResult<()>> {
     if res == 0 {
         let error = GetLastError();
         match error {
-            0 | ERROR_IO_PENDING | ERROR_IO_INCOMPLETE | ERROR_HANDLE_EOF => Ok(()),
-            _ => Err(IoError::from_raw_os_error(error as _)),
+            ERROR_IO_PENDING => Poll::Pending,
+            0 | ERROR_IO_INCOMPLETE | ERROR_HANDLE_EOF | ERROR_PIPE_CONNECTED | ERROR_NO_DATA => {
+                Poll::Ready(Ok(()))
+            }
+            _ => Poll::Ready(Err(IoError::from_raw_os_error(error as _))),
         }
     } else {
-        Ok(())
+        Poll::Ready(Ok(()))
     }
 }
 

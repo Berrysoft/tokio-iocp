@@ -25,7 +25,11 @@ impl<T: WithWsaBufMut, A: SockAddr> IocpOperation for RecvFrom<T, A> {
     type Output = (usize, A);
     type Buffer = T::Buffer;
 
-    unsafe fn operate(&mut self, handle: usize, overlapped_ptr: *mut OVERLAPPED) -> IoResult<()> {
+    unsafe fn operate(
+        &mut self,
+        handle: usize,
+        overlapped_ptr: *mut OVERLAPPED,
+    ) -> Poll<IoResult<()>> {
         let res = self.buffer.with_wsa_buf_mut(|ptr, len| {
             let mut flags = 0;
             let mut received = 0;
