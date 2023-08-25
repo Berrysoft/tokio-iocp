@@ -1,4 +1,10 @@
-use crate::{buf::*, fs::OpenOptions, io_port::IO_PORT, op, *};
+use crate::{
+    buf::*,
+    fs::OpenOptions,
+    io_port::IO_PORT,
+    op::{self, BufResultExt, BufResultIntoInner},
+    *,
+};
 use std::{
     os::windows::prelude::{
         AsHandle, AsRawHandle, BorrowedHandle, IntoRawHandle, OwnedHandle, RawHandle,
@@ -103,11 +109,10 @@ impl File {
     /// If this function encounters any form of I/O or other error, an error
     /// variant will be returned. The buffer is returned on error.
     pub async fn read_at<T: IoBufMut>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
-        let (res, mut buffer) = op::read_at(self.as_handle(), buffer, pos).await;
-        if let Ok(init) = res {
-            buffer.set_init(init);
-        }
-        (res, buffer.into_inner())
+        op::read_at(self.as_handle(), buffer, pos)
+            .await
+            .map_advanced()
+            .into_inner()
     }
 
     /// Write a buffer into this file at the specified offset, returning how
@@ -133,8 +138,9 @@ impl File {
     /// It is **not** considered an error if the entire buffer could not be
     /// written to this writer.
     pub async fn write_at<T: IoBuf>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
-        let (res, buffer) = op::write_at(self.as_handle(), buffer, pos).await;
-        (res, buffer.into_inner())
+        op::write_at(self.as_handle(), buffer, pos)
+            .await
+            .into_inner()
     }
 
     /// Attempts to flush write buffers to disk.

@@ -28,7 +28,7 @@ use windows_sys::{
     },
 };
 
-pub unsafe fn win32_result(res: i32) -> Poll<IoResult<()>> {
+unsafe fn win32_result(res: i32) -> Poll<IoResult<()>> {
     if res == 0 {
         let error = GetLastError();
         match error {
@@ -220,7 +220,6 @@ pub fn send<T: WithWsaBuf>(handle: BorrowedSocket, buffer: T::Buffer) -> IocpFut
         },
     )
 }
-
 pub type RecvFromBuffer = Aligned<A4, [u8; MAX_ADDR_SIZE]>;
 
 pub fn recv_from<T: WithWsaBufMut>(
@@ -253,16 +252,6 @@ pub fn recv_from<T: WithWsaBufMut>(
             win32_result(res)
         },
     )
-}
-
-pub fn recv_from_addr<A: SockAddr>(addr_buffer: &RecvFromBuffer, addr_size: i32) -> A {
-    unsafe {
-        A::try_from_native(
-            NonNull::new_unchecked(addr_buffer.as_ptr() as _),
-            addr_size as _,
-        )
-    }
-    .unwrap()
 }
 
 pub fn send_to<T: WithWsaBuf>(
@@ -300,4 +289,67 @@ pub fn connect_named_pipe(handle: BorrowedHandle) -> IocpFuture<()> {
         let res = ConnectNamedPipe(handle as _, overlapped_ptr);
         win32_result(res)
     })
+}
+
+pub trait BufResultExt {
+    fn map_advanced(self) -> Self;
+}
+
+impl<T: WrapBufMut> BufResultExt for BufResult<usize, T> {
+    fn map_advanced(self) -> Self {
+        let (res, buffer) = self;
+        let (res, buffer) = (res.map(|res| (res, ())), buffer).map_advanced();
+        let res = res.map(|(res, _)| res);
+        (res, buffer)
+    }
+}
+
+impl<T: WrapBufMut, O> BufResultExt for BufResult<(usize, O), T> {
+    fn map_advanced(self) -> Self {
+        let (res, mut buffer) = self;
+        if let Ok((init, _)) = &res {
+            buffer.set_init(*init);
+        }
+        (res, buffer)
+    }
+}
+
+pub trait BufResultIntoInner {
+    type InnerResult;
+
+    fn into_inner(self) -> Self::InnerResult;
+}
+
+impl<T: WrapBuf, O> BufResultIntoInner for BufResult<O, T> {
+    type InnerResult = BufResult<O, T::Buffer>;
+
+    fn into_inner(self) -> Self::InnerResult {
+        let (res, buffer) = self;
+        (res, buffer.into_inner())
+    }
+}
+
+pub trait RecvResultExt<A> {
+    type RecvFromResult;
+
+    fn map_addr(self) -> Self::RecvFromResult;
+}
+
+impl<T, A: SockAddr> RecvResultExt<A> for BufResult<usize, (T, RecvFromBuffer, i32)> {
+    type RecvFromResult = BufResult<(usize, A), T>;
+
+    fn map_addr(self) -> Self::RecvFromResult {
+        let (res, (buffer, addr_buffer, addr_size)) = self;
+        let res = res.map(|res| {
+            let addr = unsafe {
+                A::try_from_native(
+                    NonNull::new_unchecked(addr_buffer.as_ptr() as _),
+                    addr_size as _,
+                )
+            }
+            .unwrap();
+            (res, addr)
+        });
+        (res, buffer)
+    }
 }
