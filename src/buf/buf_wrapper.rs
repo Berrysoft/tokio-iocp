@@ -2,52 +2,47 @@ use crate::buf::*;
 use windows_sys::Win32::Networking::WinSock::WSABUF;
 
 pub struct BufWrapper<T> {
-    buffer: Option<T>,
+    buffer: T,
 }
 
 impl<T: IoBuf> WrapBuf for BufWrapper<T> {
     type Buffer = T;
 
     fn new(buffer: Self::Buffer) -> Self {
-        Self {
-            buffer: Some(buffer),
-        }
+        Self { buffer }
     }
 
-    fn into_inner(mut self) -> Self::Buffer {
-        self.buffer.take().unwrap()
+    fn into_inner(self) -> Self::Buffer {
+        self.buffer
     }
 }
 
 impl<T: IoBuf> WithBuf for BufWrapper<T> {
     fn with_buf<R>(&self, f: impl FnOnce(*const u8, usize) -> R) -> R {
-        let buffer = self.buffer.as_ref().unwrap();
-        f(buffer.as_buf_ptr(), buffer.buf_len())
+        f(self.buffer.as_buf_ptr(), self.buffer.buf_len())
     }
 }
 
 impl<T: IoBufMut> WrapBufMut for BufWrapper<T> {
     fn set_init(&mut self, len: usize) {
-        self.buffer.as_mut().unwrap().set_buf_init(len)
+        self.buffer.set_buf_init(len)
     }
 }
 
 impl<T: IoBufMut> WithBufMut for BufWrapper<T> {
     fn with_buf_mut<R>(&mut self, f: impl FnOnce(*mut u8, usize) -> R) -> R {
-        let buffer = self.buffer.as_mut().unwrap();
         f(
-            unsafe { buffer.as_buf_mut_ptr().add(buffer.buf_len()) },
-            buffer.buf_capacity() - buffer.buf_len(),
+            unsafe { self.buffer.as_buf_mut_ptr().add(self.buffer.buf_len()) },
+            self.buffer.buf_capacity() - self.buffer.buf_len(),
         )
     }
 }
 
 impl<T: IoBuf> WithWsaBuf for BufWrapper<T> {
     fn with_wsa_buf<R>(&self, f: impl FnOnce(*const WSABUF, usize) -> R) -> R {
-        let buffer = self.buffer.as_ref().unwrap();
         let buffer = WSABUF {
-            len: buffer.buf_len() as _,
-            buf: buffer.as_buf_ptr() as _,
+            len: self.buffer.buf_len() as _,
+            buf: self.buffer.as_buf_ptr() as _,
         };
         f(&buffer, 1)
     }
@@ -55,10 +50,9 @@ impl<T: IoBuf> WithWsaBuf for BufWrapper<T> {
 
 impl<T: IoBufMut> WithWsaBufMut for BufWrapper<T> {
     fn with_wsa_buf_mut<R>(&mut self, f: impl FnOnce(*const WSABUF, usize) -> R) -> R {
-        let buffer = self.buffer.as_mut().unwrap();
         let buffer = WSABUF {
-            len: (buffer.buf_capacity() - buffer.buf_len()) as _,
-            buf: unsafe { buffer.as_buf_mut_ptr().add(buffer.buf_len()) },
+            len: (self.buffer.buf_capacity() - self.buffer.buf_len()) as _,
+            buf: unsafe { self.buffer.as_buf_mut_ptr().add(self.buffer.buf_len()) },
         };
         f(&buffer, 1)
     }
@@ -75,8 +69,8 @@ impl<T: IoBuf> WrapBuf for VectoredBufWrapper<T> {
         Self { buffer }
     }
 
-    fn into_inner(mut self) -> Self::Buffer {
-        std::mem::take(&mut self.buffer)
+    fn into_inner(self) -> Self::Buffer {
+        self.buffer
     }
 }
 
