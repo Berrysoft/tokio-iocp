@@ -1,9 +1,8 @@
 use crate::{
     buf::*,
-    io_port::{IocpFuture, IO_PORT},
+    io_port::IO_PORT,
     net::{UnixSocketAddr, *},
-    op::{accept::*, connect::*, recv::*, recv_from::*, send::*, send_to::*},
-    *,
+    op, *,
 };
 use aligned_array::{Aligned, A4};
 use once_cell::sync::OnceCell as OnceLock;
@@ -101,9 +100,8 @@ impl Socket {
     }
 
     pub async fn connect_ex(&self, addr: impl SockAddr + 'static) -> IoResult<()> {
-        IocpFuture::new(self.as_socket(), Connect::new(addr))
-            .await
-            .0
+        op::connect(self.as_socket(), addr).await.0?;
+        Ok(())
     }
 
     pub fn listen(&self, backlog: i32) -> IoResult<()> {
@@ -152,15 +150,10 @@ impl Socket {
     ) -> IoResult<(Socket, A)> {
         let local_addr: A = self.local_addr()?;
         let accept_socket = Socket::new(local_addr.domain(), ty, protocol)?;
-        let (res, accept_socket) =
-            IocpFuture::new(self.as_socket(), Accept::new(accept_socket.handle)).await;
-        let addr = res?;
-        Ok((
-            Socket {
-                handle: accept_socket,
-            },
-            addr,
-        ))
+        let (res, buffer) = op::accept(self.as_socket(), accept_socket.handle.as_socket()).await;
+        res?;
+        let addr = op::accept_result(self.as_socket(), &buffer)?;
+        Ok((accept_socket, addr))
     }
 
     pub fn shutdown(&self, how: Shutdown) -> IoResult<()> {
@@ -178,46 +171,67 @@ impl Socket {
     }
 
     pub async fn recv<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_socket(), RecvOne::new(buffer)).await
+        let (res, mut buffer) = op::recv::<BufWrapper<T>>(self.as_socket(), buffer).await;
+        if let Ok(init) = res {
+            buffer.set_init(init);
+        }
+        (res, buffer.into_inner())
     }
 
     pub async fn recv_vectored<T: IoBufMut>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
-        IocpFuture::new(self.as_socket(), RecvVectored::new(buffer)).await
+        let (res, mut buffer) = op::recv::<VectoredBufWrapper<T>>(self.as_socket(), buffer).await;
+        if let Ok(init) = res {
+            buffer.set_init(init);
+        }
+        (res, buffer.into_inner())
     }
 
     pub async fn send<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_socket(), SendOne::new(buffer)).await
+        let (res, buffer) = op::send::<BufWrapper<T>>(self.as_socket(), buffer).await;
+        (res, buffer.into_inner())
     }
 
     pub async fn send_vectored<T: IoBuf>(&self, buffer: Vec<T>) -> BufResult<usize, Vec<T>> {
-        IocpFuture::new(self.as_socket(), SendVectored::new(buffer)).await
+        let (res, buffer) = op::send::<VectoredBufWrapper<T>>(self.as_socket(), buffer).await;
+        (res, buffer.into_inner())
     }
 
-    pub async fn recv_from<T: IoBufMut>(&self, buffer: T) -> BufResult<(usize, SocketAddr), T> {
-        IocpFuture::new(self.as_socket(), RecvFromOne::<_, SocketAddr>::new(buffer)).await
+    pub async fn recv_from<T: IoBufMut, A: SockAddr>(&self, buffer: T) -> BufResult<(usize, A), T> {
+        let (res, (mut buffer, addr_buffer, addr_size)) =
+            op::recv_from::<BufWrapper<T>>(self.as_socket(), buffer).await;
+        if let Ok(init) = res {
+            buffer.set_init(init);
+        }
+        let res = res.map(|res| (res, op::recv_from_addr(&addr_buffer, addr_size)));
+        (res, buffer.into_inner())
     }
 
-    pub async fn recv_from_vectored<T: IoBufMut>(
+    pub async fn recv_from_vectored<T: IoBufMut, A: SockAddr>(
         &self,
         buffer: Vec<T>,
-    ) -> BufResult<(usize, SocketAddr), Vec<T>> {
-        IocpFuture::new(
-            self.as_socket(),
-            RecvFromVectored::<_, SocketAddr>::new(buffer),
-        )
-        .await
+    ) -> BufResult<(usize, A), Vec<T>> {
+        let (res, (mut buffer, addr_buffer, addr_size)) =
+            op::recv_from::<VectoredBufWrapper<T>>(self.as_socket(), buffer).await;
+        if let Ok(init) = res {
+            buffer.set_init(init);
+        }
+        let res = res.map(|res| (res, op::recv_from_addr(&addr_buffer, addr_size)));
+        (res, buffer.into_inner())
     }
 
-    pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: SocketAddr) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_socket(), SendToOne::new(buffer, addr)).await
+    pub async fn send_to<T: IoBuf>(&self, buffer: T, addr: impl SockAddr) -> BufResult<usize, T> {
+        let (res, buffer) = op::send_to::<BufWrapper<T>>(self.as_socket(), buffer, addr).await;
+        (res, buffer.into_inner())
     }
 
     pub async fn send_to_vectored<T: IoBuf>(
         &self,
         buffer: Vec<T>,
-        addr: SocketAddr,
+        addr: impl SockAddr,
     ) -> BufResult<usize, Vec<T>> {
-        IocpFuture::new(self.as_socket(), SendToVectored::new(buffer, addr)).await
+        let (res, buffer) =
+            op::send_to::<VectoredBufWrapper<T>>(self.as_socket(), buffer, addr).await;
+        (res, buffer.into_inner())
     }
 }
 

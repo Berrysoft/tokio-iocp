@@ -14,7 +14,7 @@ impl<T: IoBuf> WrapBuf for BufWrapper<T> {
         }
     }
 
-    fn take_buf(&mut self) -> Self::Buffer {
+    fn into_inner(mut self) -> Self::Buffer {
         self.buffer.take().unwrap()
     }
 }
@@ -75,7 +75,7 @@ impl<T: IoBuf> WrapBuf for VectoredBufWrapper<T> {
         Self { buffer }
     }
 
-    fn take_buf(&mut self) -> Self::Buffer {
+    fn into_inner(mut self) -> Self::Buffer {
         std::mem::take(&mut self.buffer)
     }
 }

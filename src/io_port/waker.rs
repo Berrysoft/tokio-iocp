@@ -1,105 +1,71 @@
-use crate::{op::IocpOperation, *};
+use crate::*;
 use std::{
     cell::{RefCell, RefMut},
+    ops::Deref,
     task::Waker,
 };
 use windows_sys::Win32::System::IO::OVERLAPPED;
 
-pub trait WakerOp {
-    fn set_waker(&mut self, waker: Waker);
-
-    fn take_waker(&mut self) -> Option<Waker>;
-
-    fn set_err(&mut self, err: IoError);
-
-    fn take_err(&mut self) -> Option<IoError>;
-
-    unsafe fn op_ptr(&mut self) -> *mut ();
-}
-
-impl<T: WakerOp> WakerOp for &mut T {
-    fn set_waker(&mut self, waker: Waker) {
-        (**self).set_waker(waker)
-    }
-
-    fn take_waker(&mut self) -> Option<Waker> {
-        (**self).take_waker()
-    }
-
-    fn set_err(&mut self, err: IoError) {
-        (**self).set_err(err)
-    }
-
-    fn take_err(&mut self) -> Option<IoError> {
-        (**self).take_err()
-    }
-
-    unsafe fn op_ptr(&mut self) -> *mut () {
-        (**self).op_ptr()
-    }
-}
-
-pub trait WakerOpExt: WakerOp {
-    unsafe fn op_mut<Op>(&mut self) -> &mut Op {
-        unsafe { &mut *(self.op_ptr() as *mut Op) }
-    }
-}
-
-impl<T: WakerOp + ?Sized> WakerOpExt for T {}
-
 #[repr(C)]
-pub struct OverlappedWaker {
+pub struct OverlappedWakerBase {
     overlapped: OVERLAPPED,
-    waker: Box<RefCell<dyn WakerOp>>,
+    waker: RefCell<Option<Waker>>,
+    err: RefCell<Option<IoError>>,
 }
 
-impl OverlappedWaker {
-    pub fn new(waker: impl WakerOp + 'static) -> Self {
+impl OverlappedWakerBase {
+    pub fn new() -> Self {
         Self {
             overlapped: unsafe { std::mem::zeroed() },
-            waker: Box::new(RefCell::new(waker)),
+            waker: RefCell::new(None),
+            err: RefCell::new(None),
         }
     }
 
-    pub fn waker(&self) -> RefMut<dyn WakerOp> {
-        self.waker.borrow_mut()
+    pub fn set_waker(&self, waker: Waker) {
+        self.waker.borrow_mut().replace(waker);
+    }
+
+    pub fn take_waker(&self) -> Option<Waker> {
+        self.waker.borrow_mut().take()
+    }
+
+    pub fn set_err(&self, err: IoError) {
+        self.err.borrow_mut().replace(err);
+    }
+
+    pub fn take_err(&self) -> Option<IoError> {
+        self.err.borrow_mut().take()
     }
 }
 
-pub struct IoWakerOp<Op: IocpOperation> {
-    waker: Option<Waker>,
-    err: Option<IoError>,
-    op: Op,
+#[repr(C)]
+pub struct OverlappedWaker<T> {
+    base: OverlappedWakerBase,
+    buffer: RefCell<Option<T>>,
 }
 
-impl<Op: IocpOperation> IoWakerOp<Op> {
-    pub fn new(op: Op) -> Self {
+impl<T> OverlappedWaker<T> {
+    pub fn new(buffer: T) -> Self {
         Self {
-            waker: None,
-            err: None,
-            op,
+            base: OverlappedWakerBase::new(),
+            buffer: RefCell::new(Some(buffer)),
         }
+    }
+
+    pub fn buffer_mut(&self) -> RefMut<Option<T>> {
+        self.buffer.borrow_mut()
+    }
+
+    pub fn take_buffer(&self) -> T {
+        self.buffer.take().unwrap()
     }
 }
 
-impl<Op: IocpOperation> WakerOp for IoWakerOp<Op> {
-    fn set_waker(&mut self, waker: Waker) {
-        self.waker.replace(waker);
-    }
+impl<T> Deref for OverlappedWaker<T> {
+    type Target = OverlappedWakerBase;
 
-    fn take_waker(&mut self) -> Option<Waker> {
-        self.waker.take()
-    }
-
-    fn set_err(&mut self, err: IoError) {
-        self.err.replace(err);
-    }
-
-    fn take_err(&mut self) -> Option<IoError> {
-        self.err.take()
-    }
-
-    unsafe fn op_ptr(&mut self) -> *mut () {
-        &mut self.op as *mut Op as *mut ()
+    fn deref(&self) -> &Self::Target {
+        &self.base
     }
 }

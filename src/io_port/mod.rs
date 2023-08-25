@@ -69,13 +69,13 @@ impl IoPort {
             None
         };
         if let Some(overlapped) =
-            unsafe { overlapped_ptr.cast::<waker::OverlappedWaker>().as_ref() }
+            unsafe { overlapped_ptr.cast::<waker::OverlappedWakerBase>().as_ref() }
         {
             let overlapped = unsafe { Rc::from_raw(overlapped) };
             if let Some(err) = err {
-                overlapped.waker().set_err(err);
+                overlapped.set_err(err);
             }
-            let waker = overlapped.waker().take_waker();
+            let waker = overlapped.take_waker();
             if let Some(waker) = waker {
                 waker.wake();
             }
