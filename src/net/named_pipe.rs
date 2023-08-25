@@ -337,17 +337,15 @@ impl NamedPipeClient {
     /// Read some bytes from the pipe into the specified
     /// buffer, returning how many bytes were read.
     pub async fn read<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
-        let (res, mut buffer) = op::read_at(self.as_handle(), buffer, 0).await;
-        if let Ok(init) = res {
-            buffer.set_init(init);
-        }
-        (res, buffer.into_inner())
+        op::read_at(self.as_handle(), buffer, 0)
+            .await
+            .map_advanced()
+            .into_inner()
     }
 
     /// Write a buffer into the pipe, returning how many bytes were written.
     pub async fn write<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
-        let (res, buffer) = op::write_at(self.as_handle(), buffer, 0).await;
-        (res, buffer.into_inner())
+        op::write_at(self.as_handle(), buffer, 0).await.into_inner()
     }
 }
 
