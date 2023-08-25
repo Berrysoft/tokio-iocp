@@ -256,15 +256,13 @@ pub fn recv_from<T: WithWsaBufMut>(
 }
 
 pub fn recv_from_addr<A: SockAddr>(addr_buffer: &RecvFromBuffer, addr_size: i32) -> A {
-    match unsafe {
+    unsafe {
         A::try_from_native(
             NonNull::new_unchecked(addr_buffer.as_ptr() as _),
             addr_size as _,
         )
-    } {
-        Some(a) => a,
-        None => panic!("{:?}", addr_buffer),
     }
+    .unwrap()
 }
 
 pub fn send_to<T: WithWsaBuf>(
