@@ -5,7 +5,7 @@ mod waker;
 
 use crate::*;
 use std::{
-    os::windows::prelude::{AsRawHandle, FromRawHandle, OwnedHandle},
+    os::windows::io::{AsRawHandle, HandleOrNull, OwnedHandle},
     ptr::null_mut,
     rc::Rc,
 };
@@ -26,13 +26,9 @@ pub struct IoPort {
 impl IoPort {
     pub fn new() -> IoResult<Self> {
         let port = unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0) };
-        if port == 0 {
-            Err(IoError::last_os_error())
-        } else {
-            Ok(Self {
-                port: unsafe { OwnedHandle::from_raw_handle(port as _) },
-            })
-        }
+        let port = OwnedHandle::try_from(unsafe { HandleOrNull::from_raw_handle(port as _) })
+            .map_err(|_| IoError::last_os_error())?;
+        Ok(Self { port })
     }
 
     pub fn attach(&self, handle: usize) -> IoResult<()> {
