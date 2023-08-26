@@ -61,7 +61,7 @@ impl<'a, T> IocpFuture<'a, T> {
                 buffer.as_mut().unwrap(),
             )
         };
-        if let Poll::Ready(Err(_)) = result {
+        if result.is_ready() {
             unsafe { Rc::from_raw(overlapped_ptr as *mut OverlappedWaker<T>) };
         }
         Self {
