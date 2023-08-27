@@ -5,7 +5,7 @@ mod waker;
 
 use crate::*;
 use std::{
-    os::windows::prelude::{AsRawHandle, FromRawHandle, OwnedHandle},
+    os::windows::io::{AsRawHandle, HandleOrNull, OwnedHandle},
     ptr::null_mut,
     rc::Rc,
 };
@@ -26,13 +26,9 @@ pub struct IoPort {
 impl IoPort {
     pub fn new() -> IoResult<Self> {
         let port = unsafe { CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0) };
-        if port == 0 {
-            Err(IoError::last_os_error())
-        } else {
-            Ok(Self {
-                port: unsafe { OwnedHandle::from_raw_handle(port as _) },
-            })
-        }
+        let port = OwnedHandle::try_from(unsafe { HandleOrNull::from_raw_handle(port as _) })
+            .map_err(|_| IoError::last_os_error())?;
+        Ok(Self { port })
     }
 
     pub fn attach(&self, handle: usize) -> IoResult<()> {
@@ -69,13 +65,13 @@ impl IoPort {
             None
         };
         if let Some(overlapped) =
-            unsafe { overlapped_ptr.cast::<waker::OverlappedWaker>().as_ref() }
+            unsafe { overlapped_ptr.cast::<waker::OverlappedWakerBase>().as_ref() }
         {
             let overlapped = unsafe { Rc::from_raw(overlapped) };
             if let Some(err) = err {
-                overlapped.waker().set_err(err);
+                overlapped.set_err(err);
             }
-            let waker = overlapped.waker().take_waker();
+            let waker = overlapped.take_waker();
             if let Some(waker) = waker {
                 waker.wake();
             }

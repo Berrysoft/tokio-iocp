@@ -1,8 +1,8 @@
 use crate::{
     buf::*,
     fs::OpenOptions,
-    io_port::{IocpFuture, IO_PORT},
-    op::{read_at::*, write_at::*},
+    io_port::IO_PORT,
+    op::{self, BufResultExt, BufResultIntoInner},
     *,
 };
 use std::{
@@ -109,7 +109,10 @@ impl File {
     /// If this function encounters any form of I/O or other error, an error
     /// variant will be returned. The buffer is returned on error.
     pub async fn read_at<T: IoBufMut>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_handle(), ReadAt::new(buffer, pos)).await
+        op::read_at(self.as_handle(), buffer, pos)
+            .await
+            .map_advanced()
+            .into_inner()
     }
 
     /// Write a buffer into this file at the specified offset, returning how
@@ -135,7 +138,9 @@ impl File {
     /// It is **not** considered an error if the entire buffer could not be
     /// written to this writer.
     pub async fn write_at<T: IoBuf>(&self, buffer: T, pos: usize) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_handle(), WriteAt::new(buffer, pos)).await
+        op::write_at(self.as_handle(), buffer, pos)
+            .await
+            .into_inner()
     }
 
     /// Attempts to flush write buffers to disk.

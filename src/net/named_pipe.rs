@@ -5,7 +5,7 @@
 use crate::{
     buf::*,
     io_port::*,
-    op::{connect_named_pipe::*, read_at::*, write_at::*},
+    op::{self, BufResultExt, BufResultIntoInner},
     *,
 };
 use std::{
@@ -175,9 +175,8 @@ impl NamedPipeServer {
     /// # tokio_iocp::IoResult::Ok(()) });
     /// ```
     pub async fn connect(&self) -> IoResult<()> {
-        IocpFuture::new(self.as_handle(), ConnectNamedPipe::new())
-            .await
-            .0
+        op::connect_named_pipe(self.as_handle()).await.0?;
+        Ok(())
     }
 
     /// Disconnects the server end of a named pipe instance from a client
@@ -222,12 +221,15 @@ impl NamedPipeServer {
     /// Read some bytes from the pipe into the specified
     /// buffer, returning how many bytes were read.
     pub async fn read<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_handle(), ReadAt::new(buffer, 0)).await
+        op::read_at(self.as_handle(), buffer, 0)
+            .await
+            .map_advanced()
+            .into_inner()
     }
 
     /// Write a buffer into the pipe, returning how many bytes were written.
     pub async fn write<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_handle(), WriteAt::new(buffer, 0)).await
+        op::write_at(self.as_handle(), buffer, 0).await.into_inner()
     }
 }
 
@@ -335,12 +337,15 @@ impl NamedPipeClient {
     /// Read some bytes from the pipe into the specified
     /// buffer, returning how many bytes were read.
     pub async fn read<T: IoBufMut>(&self, buffer: T) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_handle(), ReadAt::new(buffer, 0)).await
+        op::read_at(self.as_handle(), buffer, 0)
+            .await
+            .map_advanced()
+            .into_inner()
     }
 
     /// Write a buffer into the pipe, returning how many bytes were written.
     pub async fn write<T: IoBuf>(&self, buffer: T) -> BufResult<usize, T> {
-        IocpFuture::new(self.as_handle(), WriteAt::new(buffer, 0)).await
+        op::write_at(self.as_handle(), buffer, 0).await.into_inner()
     }
 }
 
