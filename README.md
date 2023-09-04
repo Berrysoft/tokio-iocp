@@ -1,3 +1,6 @@
+# Archived
+This project is archived in favor of [compio](https://github.com/Berrysoft/compio).
+
 # tokio-iocp
 
 [![crates.io](https://img.shields.io/crates/v/tokio-iocp)](https://crates.io/crates/tokio-iocp)
